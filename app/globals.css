@@ -1,0 +1,266 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --base: #070b1a;
+  --card: #0d1428;
+  --surface: #131b33;
+  --primary: #4aaddf;
+  --primary-light: #7cc8f0;
+  --violet: #a78bfa;
+  --pink: #f472b6;
+  --ink: #e4eaf6;
+  --muted: #8a9abf;
+  --light-section: #f4f8ff;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+}
+@media (min-width: 1280px) {
+  html {
+    scroll-padding-top: 88px;
+  }
+}
+
+html,
+body {
+  /* Никакого горизонтального скролла страницы на мобильных */
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body {
+  background-color: var(--base);
+  color: var(--ink);
+  font-family: var(--font-body), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading), sans-serif;
+}
+
+/* Инпуты минимум 16px — iOS не зумит при фокусе */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+::selection {
+  background: rgba(167, 139, 250, 0.35);
+  color: #fff;
+}
+
+/* ---------- Фирменная водяная марка (весь сайт) ----------
+   Еле заметный повторяющийся знак-танцовщица под всем контентом.
+   inset отрицательный — «выпуск» за края, чтобы rotate/scale не оголял стыки.
+   Контент лежит выше (обёртка .site-content с z-10 в layout). */
+.brand-watermark {
+  position: fixed;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("/images/logo-dancer.png");
+  background-repeat: repeat;
+  background-size: 250px;
+  transform: rotate(-15deg) scale(1.2);
+}
+
+/* ---------- Утилиты бренда ---------- */
+
+/* Текст брендовым градиентом */
+.text-gradient {
+  background: linear-gradient(135deg, #4aaddf, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Объёмная кнопка «Записаться» (3D-эффект тенями) */
+.btn-cta {
+  background: linear-gradient(135deg, #4aaddf, #a78bfa, #f472b6);
+  color: #fff;
+  border-radius: 9999px;
+  box-shadow: 0 4px 15px rgba(74, 173, 223, 0.3),
+    0 8px 30px rgba(167, 139, 250, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+/* Hover-эффекты — только на устройствах с реальным ховером (не тач) */
+@media (hover: hover) {
+  .btn-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 173, 223, 0.4),
+      0 12px 40px rgba(167, 139, 250, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    filter: brightness(1.05);
+  }
+}
+.btn-cta:active {
+  transform: translateY(0);
+}
+
+/* Вторичная кнопка (outline) */
+.btn-ghost {
+  border: 1px solid rgba(228, 234, 246, 0.25);
+  border-radius: 9999px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+@media (hover: hover) {
+  .btn-ghost:hover {
+    border-color: rgba(124, 200, 240, 0.6);
+    background: rgba(124, 200, 240, 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+/* Рамка с градиентом (для карточек) */
+.gradient-border {
+  position: relative;
+  background: var(--card);
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #4aaddf, #a78bfa, #f472b6);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ---------- Reveal-on-scroll ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- Скрыть скроллбар (горизонтальное меню/слайдеры) ---------- */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; /* инерционный скролл на iOS */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Горизонтальный тач-скролл (табы, карусель) */
+.touch-scroll-x {
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Поля ввода в админ-формах */
+.admin-input {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  padding: 0.6rem 0.9rem;
+  font-size: 16px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s ease;
+  /* Нативные date/time пикеры — в тёмной теме (виден значок календаря/часов) */
+  color-scheme: dark;
+}
+.admin-input:focus {
+  border-color: var(--primary);
+}
+
+/* Пульсация сегодняшнего занятия в календаре */
+@keyframes pulse-red {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0);
+  }
+}
+.animate-pulse-red {
+  animation: pulse-red 2.2s ease-out infinite;
+}
+
+/* Тряска (неверный код при входе) */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-7px);
+  }
+  40%,
+  80% {
+    transform: translateX(7px);
+  }
+}
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+/* Мягкое появление (модалка календаря) */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-pop-in {
+  animation: pop-in 0.22s ease-out both;
+}
+
+/* ---------- Бесконечная бегущая лента (галерея) ---------- */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
