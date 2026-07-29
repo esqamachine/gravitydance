@@ -18,17 +18,3 @@ export function normalizePhone(input: string): string {
 export function toPlus(norm: string): string {
   return norm.length === 11 ? "+" + norm : norm;
 }
-
-/** Маска для поля ввода: любой ввод → «+7 (XXX) XXX-XX-XX». */
-export function formatPhoneInput(value: string): string {
-  let d = (value ?? "").replace(/\D/g, "").replace(/^8/, "7");
-  if (d[0] !== "7") d = "7" + d;
-  d = d.slice(0, 11);
-  const p = d.slice(1);
-  let out = "+7";
-  if (p.length > 0) out += " (" + p.slice(0, 3);
-  if (p.length >= 3) out += ") " + p.slice(3, 6);
-  if (p.length >= 6) out += "-" + p.slice(6, 8);
-  if (p.length >= 8) out += "-" + p.slice(8, 10);
-  return out;
-}

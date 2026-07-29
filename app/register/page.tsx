@@ -4,9 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { formatPhoneInput, normalizePhone } from "@/lib/phone";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
+import PhoneField from "@/components/auth/PhoneField";
 
 const inputClass =
   "w-full min-h-[50px] rounded-xl border border-white/10 bg-surface px-4 py-3 text-base font-body text-ink placeholder-muted/60 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25";
@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const supabase = createClient();
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneDigits, setPhoneDigits] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -27,8 +27,8 @@ export default function RegisterPage() {
     setError("");
 
     if (name.trim().length < 2) return setError("Укажите имя");
-    if (normalizePhone(phone).length !== 11)
-      return setError("Введите корректный номер телефона");
+    if (phoneDigits.length !== 10)
+      return setError("Введите номер телефона полностью");
     if (!email.includes("@")) return setError("Введите корректный email");
     if (password.length < 6)
       return setError("Пароль должен быть не короче 6 символов");
@@ -39,7 +39,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, email, password }),
+        body: JSON.stringify({ name, phone: "+7" + phoneDigits, email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -91,17 +91,10 @@ export default function RegisterPage() {
           autoComplete="name"
           className={inputClass}
         />
-        <input
-          type="tel"
-          inputMode="tel"
-          value={phone}
-          onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
-          onFocus={() => {
-            if (!phone) setPhone("+7 (");
-          }}
-          placeholder="+7 (900) 000-00-00"
+        <PhoneField
+          digits={phoneDigits}
+          onChange={setPhoneDigits}
           autoComplete="tel"
-          className={inputClass}
         />
         <input
           type="email"
