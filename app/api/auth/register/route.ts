@@ -61,6 +61,8 @@ export async function POST(request: Request) {
     );
   }
 
+  console.log("[register] Создаю пользователя:", { email, phone });
+
   // Создаём пользователя с подтверждённым email (без письма-подтверждения)
   const { data: created, error: createErr } =
     await supabaseAdmin.auth.admin.createUser({
@@ -100,5 +102,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Не удалось сохранить профиль" }, { status: 500 });
   }
 
+  console.log("[register] Успех:", { userId: created.user.id, email, phone });
   return Response.json({ success: true });
 }

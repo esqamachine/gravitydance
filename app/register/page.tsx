@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatPhoneInput, normalizePhone } from "@/lib/phone";
 import AuthShell from "@/components/auth/AuthShell";
+import PasswordInput from "@/components/auth/PasswordInput";
 
 const inputClass =
   "w-full min-h-[50px] rounded-xl border border-white/10 bg-surface px-4 py-3 text-base font-body text-ink placeholder-muted/60 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25";
@@ -86,7 +87,7 @@ export default function RegisterPage() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Имя и фамилия"
+          placeholder="ФИО"
           autoComplete="name"
           className={inputClass}
         />
@@ -106,25 +107,21 @@ export default function RegisterPage() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
+          placeholder="Адрес электронной почты"
           autoComplete="email"
           className={inputClass}
         />
-        <input
-          type="password"
+        <PasswordInput
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
           placeholder="Пароль (минимум 6 символов)"
           autoComplete="new-password"
-          className={inputClass}
         />
-        <input
-          type="password"
+        <PasswordInput
           value={password2}
-          onChange={(e) => setPassword2(e.target.value)}
+          onChange={setPassword2}
           placeholder="Повторите пароль"
           autoComplete="new-password"
-          className={inputClass}
         />
 
         {error && (

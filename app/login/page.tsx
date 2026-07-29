@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { normalizePhone } from "@/lib/phone";
 import AuthShell from "@/components/auth/AuthShell";
+import PasswordInput from "@/components/auth/PasswordInput";
 
 const inputClass =
   "w-full min-h-[50px] rounded-xl border border-white/10 bg-surface px-4 py-3 text-base font-body text-ink placeholder-muted/60 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25";
@@ -59,7 +60,20 @@ function LoginForm() {
         password,
       });
       if (signInErr) {
-        setError("Неверный логин или пароль");
+        // Логируем реальную причину — на проде видно в консоли браузера
+        console.error("[login] signInWithPassword:", {
+          status: signInErr.status,
+          name: signInErr.name,
+          message: signInErr.message,
+        });
+        const msg = signInErr.message || "";
+        if (/not confirmed/i.test(msg)) {
+          setError("Email не подтверждён. Обратитесь в поддержку студии.");
+        } else if (/invalid login credentials/i.test(msg)) {
+          setError("Неверный логин или пароль");
+        } else {
+          setError(msg || "Не удалось войти");
+        }
         setLoading(false);
         return;
       }
@@ -96,13 +110,11 @@ function LoginForm() {
           autoComplete="username"
           className={inputClass}
         />
-        <input
-          type="password"
+        <PasswordInput
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
           placeholder="Пароль"
           autoComplete="current-password"
-          className={inputClass}
         />
 
         {error && (

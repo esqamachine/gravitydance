@@ -34,11 +34,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Ошибка сервера" }, { status: 500 });
   }
   if (!data?.email) {
+    console.log("[resolve-phone] Не найден профиль/email для телефона:", phone);
     return Response.json(
       { error: "Аккаунт с таким номером не найден" },
       { status: 404 }
     );
   }
 
+  console.log("[resolve-phone] Телефон", phone, "→ email", data.email);
   return Response.json({ email: data.email });
 }
