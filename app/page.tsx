@@ -10,8 +10,11 @@ import Reviews from "@/components/Reviews";
 import SignupForm from "@/components/SignupForm";
 import Contacts from "@/components/Contacts";
 import Footer from "@/components/Footer";
+import { getGalleryImages } from "@/lib/queries";
 
-export default function Home() {
+export default async function Home() {
+  const gallery = await getGalleryImages();
+  const galleryUrls = gallery.map((g) => g.image_url);
   return (
     <>
       <Header />
@@ -23,7 +26,7 @@ export default function Home() {
         <Coaches />
         <SignupForm />
         <FAQ />
-        <Gallery />
+        <Gallery images={galleryUrls} />
         <Reviews />
         <Contacts />
       </main>

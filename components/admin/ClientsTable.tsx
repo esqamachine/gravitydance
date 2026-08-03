@@ -123,7 +123,7 @@ export default function ClientsTable({
       <div className="flex flex-wrap gap-1">
         {c.enrolled.map((e) => (
           <span
-            key={e.group_id}
+            key={e.cg_id}
             className="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary-light"
           >
             {e.group_name}

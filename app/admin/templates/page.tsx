@@ -1,5 +1,5 @@
 import {
-  getScheduleTemplates,
+  getTemplateSets,
   getAllGroups,
   getAllSubgroups,
 } from "@/lib/queries";
@@ -9,8 +9,8 @@ import TemplatesAdmin from "@/components/admin/TemplatesAdmin";
 export const dynamic = "force-dynamic";
 
 export default async function AdminTemplatesPage() {
-  const [templates, groups, subgroups] = await Promise.all([
-    getScheduleTemplates(),
+  const [templateSets, groups, subgroups] = await Promise.all([
+    getTemplateSets(),
     getAllGroups(),
     getAllSubgroups(),
   ]);
@@ -24,11 +24,11 @@ export default async function AdminTemplatesPage() {
         Шаблоны <span className="text-gradient">расписания</span>
       </h1>
       <p className="font-body text-sm text-muted">
-        Настройте повторяющиеся занятия, затем генерируйте расписание на неделю
-        одной кнопкой на странице «Расписание».
+        Шаблон — как блокнот: занятия на неделю по дням. Кнопкой «Применить на
+        месяц» расписание разворачивается в занятия на 31 день вперёд.
       </p>
       <TemplatesAdmin
-        templates={templates}
+        templateSets={templateSets}
         groups={groups}
         subgroupsByGroup={subgroupsByGroup}
       />

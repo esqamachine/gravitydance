@@ -20,16 +20,24 @@ import {
   addManualPayment,
   excludeClient,
   getClientDetailAction,
+  getClientJournalAction,
 } from "@/app/admin/actions";
 import {
   fullName,
   formatMoney,
   formatDate,
   PAYMENT_STATUS_RU,
+  ATTENDANCE_RU,
   type Group,
   type Subgroup,
 } from "@/lib/db";
-import type { ClientDetail } from "@/lib/queries";
+import type { ClientDetail, JournalEntry } from "@/lib/queries";
+
+const attStyle: Record<string, string> = {
+  present: "bg-green-500/15 text-green-400",
+  late: "bg-yellow-500/15 text-yellow-400",
+  absent: "bg-pink/15 text-pink",
+};
 
 const statusStyle: Record<string, string> = {
   paid: "bg-green-500/15 text-green-400",
@@ -54,10 +62,15 @@ export default function ClientDetailModal({
   const [pending, startTransition] = useTransition();
 
   // форма добавления в группу
+  const [participant, setParticipant] = useState(""); // "" = основной, иначе child_id
   const [groupId, setGroupId] = useState("");
   const [subgroupId, setSubgroupId] = useState("");
   // форма оплаты
   const [amount, setAmount] = useState("");
+  // журнал посещений
+  const [journal, setJournal] = useState<JournalEntry[] | null>(null);
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [journalLoading, setJournalLoading] = useState(false);
 
   const pid = detail.profile.id;
   const subOptions = groupId ? subgroupsByGroup[groupId] ?? [] : [];
@@ -77,17 +90,17 @@ export default function ClientDetailModal({
       fd.set("profile_id", pid);
       fd.set("group_id", groupId);
       if (subgroupId) fd.set("subgroup_id", subgroupId);
+      if (participant) fd.set("child_id", participant);
       await enrollClient(fd);
       setGroupId("");
       setSubgroupId("");
       await refresh();
     });
 
-  const doUnenroll = (gid: string) =>
+  const doUnenroll = (cgId: string) =>
     run(async () => {
       const fd = new FormData();
-      fd.set("profile_id", pid);
-      fd.set("group_id", gid);
+      fd.set("cg_id", cgId);
       await unenrollClient(fd);
       await refresh();
     });
@@ -103,6 +116,17 @@ export default function ClientDetailModal({
       setAmount("");
       await refresh();
     });
+
+  const toggleJournal = async () => {
+    const next = !journalOpen;
+    setJournalOpen(next);
+    if (next && journal === null) {
+      setJournalLoading(true);
+      const j = await getClientJournalAction(pid);
+      setJournal(j);
+      setJournalLoading(false);
+    }
+  };
 
   const doExclude = () => {
     if (!confirm("Вы уверены? Клиент будет убран из всех групп.")) return;
@@ -178,6 +202,30 @@ export default function ClientDetailModal({
           </div>
         </div>
 
+        {/* Участник */}
+        <section className="mt-6">
+          <h4 className="mb-2 font-heading text-sm font-bold text-ink">
+            Участник
+          </h4>
+          <select
+            value={participant}
+            onChange={(e) => setParticipant(e.target.value)}
+            className="admin-input w-full"
+          >
+            <option value="">
+              {fullName(detail.profile)} (основной)
+            </option>
+            {detail.children.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.full_name} (ребёнок)
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 font-body text-xs text-muted">
+            Выберите, кого записывать в группу ниже.
+          </p>
+        </section>
+
         {/* Группы */}
         <section className="mt-6">
           <h4 className="mb-2 font-heading text-sm font-bold text-ink">
@@ -189,7 +237,7 @@ export default function ClientDetailModal({
             <ul className="space-y-2">
               {detail.enrolled.map((g) => (
                 <li
-                  key={g.group_id}
+                  key={g.cg_id}
                   className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2"
                 >
                   <span className="font-body text-sm text-ink">
@@ -197,9 +245,13 @@ export default function ClientDetailModal({
                     {g.subgroup_name && (
                       <span className="text-muted"> → {g.subgroup_name}</span>
                     )}
+                    <span className="text-primary-light">
+                      {" "}
+                      ({g.participant_name ?? "основной"})
+                    </span>
                   </span>
                   <button
-                    onClick={() => doUnenroll(g.group_id)}
+                    onClick={() => doUnenroll(g.cg_id)}
                     disabled={pending}
                     aria-label="Убрать из группы"
                     className="rounded-full p-1.5 text-muted transition hover:bg-pink/10 hover:text-pink"
@@ -295,22 +347,72 @@ export default function ClientDetailModal({
           )}
         </section>
 
-        {/* Посещения */}
-        <section className="mt-6 grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-white/5 p-3 text-center">
-            <p className="font-heading text-xl font-bold text-ink">
-              {detail.attendedThisMonth}
-              <span className="text-muted">/{detail.totalThisMonth}</span>
-            </p>
-            <p className="font-body text-xs text-muted">Посещений в этом месяце</p>
-          </div>
-          <div className="rounded-xl bg-white/5 p-3 text-center">
-            <p className="font-heading text-xl font-bold text-ink">
-              {detail.attendedAllTime}
-              <span className="text-muted">/{detail.totalAllTime}</span>
-            </p>
-            <p className="font-body text-xs text-muted">Всего посещений</p>
-          </div>
+        {/* Посещения (кликабельно → журнал) */}
+        <section className="mt-6">
+          <button
+            type="button"
+            onClick={toggleJournal}
+            className="grid w-full grid-cols-2 gap-3 rounded-xl text-left transition hover:opacity-90"
+          >
+            <div className="rounded-xl bg-white/5 p-3 text-center">
+              <p className="font-heading text-xl font-bold text-ink">
+                {detail.attendedThisMonth}
+                <span className="text-muted">/{detail.totalThisMonth}</span>
+              </p>
+              <p className="font-body text-xs text-muted">
+                Посещений в этом месяце
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/5 p-3 text-center">
+              <p className="font-heading text-xl font-bold text-ink">
+                {detail.attendedAllTime}
+                <span className="text-muted">/{detail.totalAllTime}</span>
+              </p>
+              <p className="font-body text-xs text-muted">Всего посещений</p>
+            </div>
+          </button>
+          <p className="mt-1.5 text-center font-body text-xs text-primary-light">
+            {journalOpen ? "Скрыть журнал" : "Нажмите, чтобы открыть журнал"}
+          </p>
+
+          {journalOpen && (
+            <div className="mt-3">
+              {journalLoading ? (
+                <p className="flex items-center justify-center gap-2 py-4 font-body text-sm text-muted">
+                  <Loader2 size={14} className="animate-spin" /> Загрузка…
+                </p>
+              ) : journal && journal.length > 0 ? (
+                <ul className="max-h-52 space-y-1.5 overflow-y-auto">
+                  {journal.map((j) => (
+                    <li
+                      key={j.id}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-2 font-body text-xs"
+                    >
+                      <span className="min-w-0 truncate text-ink">
+                        {j.date ? formatDate(j.date) : "—"}
+                        <span className="text-muted"> · {j.group_name}</span>
+                        {j.participant !== "основной" && (
+                          <span className="text-primary-light">
+                            {" "}
+                            · {j.participant}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${attStyle[j.status]}`}
+                      >
+                        {ATTENDANCE_RU[j.status]}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="py-3 text-center font-body text-sm text-muted">
+                  Отметок о посещениях пока нет.
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Действия */}

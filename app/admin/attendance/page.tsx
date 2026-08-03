@@ -18,7 +18,19 @@ export default async function AdminAttendancePage({
   searchParams: Promise<{ lesson?: string }>;
 }) {
   const { lesson: lessonId } = await searchParams;
-  const lessons = await getAllLessons();
+  const allLessons = await getAllLessons();
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(now.getDate()).padStart(2, "0")}`;
+  // Предстоящие занятия (сегодня и позже), по возрастанию даты/времени.
+  const lessons = allLessons
+    .filter((l) => l.status !== "cancelled" && l.date >= today)
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)
+    );
   const { lesson, roster } = lessonId
     ? await getLessonRoster(lessonId)
     : { lesson: null, roster: [] };
@@ -33,28 +45,28 @@ export default async function AdminAttendancePage({
       <div>
         <p className="mb-3 font-body text-sm text-muted">Выберите занятие:</p>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-          {lessons
-            .filter((l) => l.status !== "cancelled")
-            .map((l) => (
-              <Link
-                key={l.id}
-                href={`/admin/attendance?lesson=${l.id}`}
-                className={`shrink-0 rounded-2xl border px-4 py-2.5 font-body text-sm transition ${
-                  l.id === lessonId
-                    ? "border-primary bg-primary/15 text-ink"
-                    : "border-white/10 bg-card text-muted hover:text-ink"
-                }`}
-              >
-                <span className="block font-semibold text-ink">
-                  {l.group_name}
-                </span>
-                <span className="text-xs">
-                  {formatDate(l.date)} · {l.start_time.slice(0, 5)}
-                </span>
-              </Link>
-            ))}
+          {lessons.map((l) => (
+            <Link
+              key={l.id}
+              href={`/admin/attendance?lesson=${l.id}`}
+              className={`shrink-0 rounded-2xl border px-4 py-2.5 font-body text-sm transition ${
+                l.id === lessonId
+                  ? "border-primary bg-primary/15 text-ink"
+                  : "border-white/10 bg-card text-muted hover:text-ink"
+              }`}
+            >
+              <span className="block font-semibold text-ink">
+                {l.group_name}
+              </span>
+              <span className="text-xs">
+                {formatDate(l.date)} · {l.start_time.slice(0, 5)}
+              </span>
+            </Link>
+          ))}
           {lessons.length === 0 && (
-            <p className="font-body text-sm text-muted">Занятий нет.</p>
+            <p className="font-body text-sm text-muted">
+              Предстоящих занятий нет. Сгенерируйте расписание из шаблонов.
+            </p>
           )}
         </div>
       </div>
@@ -73,10 +85,15 @@ export default async function AdminAttendancePage({
             <ul className="mt-4 divide-y divide-white/10">
               {roster.map((r) => (
                 <li
-                  key={r.profile_id}
+                  key={`${r.profile_id}|${r.child_id ?? ""}`}
                   className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span className="font-body text-ink">{r.name}</span>
+                  <span className="font-body text-ink">
+                    {r.name}
+                    {r.is_child && (
+                      <span className="text-muted"> · ребёнок</span>
+                    )}
+                  </span>
                   <div className="flex gap-2">
                     {STATUSES.map((s) => (
                       <form key={s.value} action={markAttendance}>
@@ -85,6 +102,11 @@ export default async function AdminAttendancePage({
                           type="hidden"
                           name="profile_id"
                           value={r.profile_id}
+                        />
+                        <input
+                          type="hidden"
+                          name="child_id"
+                          value={r.child_id ?? ""}
                         />
                         <input type="hidden" name="status" value={s.value} />
                         <button

@@ -71,7 +71,7 @@ export default async function DashboardHome() {
             <div className="mt-4 flex flex-wrap gap-2">
               {groups.map((g) => (
                 <span
-                  key={g.group_id}
+                  key={g.cg_id}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-body text-sm text-primary-light"
                 >
                   {g.group_name}

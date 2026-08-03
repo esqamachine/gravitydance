@@ -12,6 +12,8 @@ import {
   type News,
   type Camp,
   type ScheduleTemplate,
+  type Child,
+  type GalleryImage,
 } from "@/lib/db";
 
 /* Все запросы обёрнуты в safe() и возвращают пустые данные, если миграция
@@ -48,26 +50,74 @@ async function subgroupMap(): Promise<Map<string, string>> {
   return new Map(subs.map((s) => [s.id, s.name]));
 }
 
+/* ---------- Дети клиента ---------- */
+
+export function getProfileChildren(profileId: string): Promise<Child[]> {
+  return safe(async () => {
+    const { data } = await supabaseAdmin
+      .from("children")
+      .select("*")
+      .eq("parent_id", profileId)
+      .order("created_at", { ascending: true });
+    return (data ?? []) as Child[];
+  }, []);
+}
+
 /* ---------- Клиент ---------- */
 
 export function getProfileGroups(profileId: string): Promise<EnrolledGroup[]> {
   return safe(async () => {
     const subs = await subgroupMap();
-    const { data } = await supabaseAdmin
+    // Обогащённый запрос с участником-ребёнком. До миграций 012/013 столбца
+    // child_id и таблицы children нет — тогда падаем на легаси-запрос, чтобы
+    // группы клиента не пропадали.
+    const enriched = await supabaseAdmin
       .from("client_groups")
-      .select("*, group:groups(name)")
+      .select(
+        "id, group_id, subgroup_id, child_id, group:groups(name), child:children(full_name)"
+      )
       .eq("profile_id", profileId);
-    return ((data ?? []) as unknown as {
+
+    if (enriched.error) {
+      const legacy = await supabaseAdmin
+        .from("client_groups")
+        .select("id, group_id, subgroup_id, group:groups(name)")
+        .eq("profile_id", profileId);
+      return ((legacy.data ?? []) as unknown as {
+        id: string;
+        group_id: string;
+        subgroup_id: string | null;
+        group: { name: string } | null;
+      }[])
+        .filter((r) => r.group_id)
+        .map((r) => ({
+          cg_id: r.id,
+          group_id: r.group_id,
+          group_name: r.group?.name ?? "—",
+          subgroup_id: r.subgroup_id ?? null,
+          subgroup_name: r.subgroup_id ? subs.get(r.subgroup_id) ?? null : null,
+          child_id: null,
+          participant_name: null,
+        }));
+    }
+
+    return ((enriched.data ?? []) as unknown as {
+      id: string;
       group_id: string;
       subgroup_id: string | null;
+      child_id: string | null;
       group: { name: string } | null;
+      child: { full_name: string } | null;
     }[])
       .filter((r) => r.group_id)
       .map((r) => ({
+        cg_id: r.id,
         group_id: r.group_id,
         group_name: r.group?.name ?? "—",
         subgroup_id: r.subgroup_id ?? null,
         subgroup_name: r.subgroup_id ? subs.get(r.subgroup_id) ?? null : null,
+        child_id: r.child_id ?? null,
+        participant_name: r.child?.full_name ?? null,
       }));
   }, []);
 }
@@ -173,8 +223,10 @@ export function getAllProfiles(): Promise<ProfileRow[]> {
 
     return ((data ?? []) as unknown as (Profile & {
       client_groups: {
+        id: string;
         group_id: string;
         subgroup_id: string | null;
+        child_id?: string | null;
         group: { name: string } | null;
       }[];
     })[]).map((p) => ({
@@ -183,12 +235,15 @@ export function getAllProfiles(): Promise<ProfileRow[]> {
       enrolled: (p.client_groups ?? [])
         .filter((cg) => cg.group_id)
         .map((cg) => ({
+          cg_id: cg.id,
           group_id: cg.group_id,
           group_name: cg.group?.name ?? "—",
           subgroup_id: cg.subgroup_id ?? null,
           subgroup_name: cg.subgroup_id
             ? subs.get(cg.subgroup_id) ?? null
             : null,
+          child_id: cg.child_id ?? null,
+          participant_name: null,
         })),
     }));
   }, []);
@@ -221,6 +276,101 @@ export function getGroupsWithCounts(): Promise<GroupWithCount[]> {
       student_count: g.client_groups?.[0]?.count ?? 0,
     }));
   }, []);
+}
+
+/* ---------- Детали группы с участниками (админ) ---------- */
+
+export interface GroupParticipant {
+  cg_id: string;
+  name: string;
+  phone: string;
+  subgroup_id: string | null;
+  is_child: boolean;
+  paid: boolean;
+}
+
+export interface GroupDetail {
+  group: Group;
+  subgroups: Subgroup[];
+  participants: GroupParticipant[];
+}
+
+export function getGroupDetail(groupId: string): Promise<GroupDetail | null> {
+  return safe(
+    async () => {
+      const { data: group } = await supabaseAdmin
+        .from("groups")
+        .select("*")
+        .eq("id", groupId)
+        .maybeSingle();
+      if (!group) return null;
+
+      const { data: subgroups } = await supabaseAdmin
+        .from("subgroups")
+        .select("*")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: true });
+
+      const { data: cg } = await supabaseAdmin
+        .from("client_groups")
+        .select(
+          "id, subgroup_id, child_id, profile:profiles(id,first_name,last_name,patronymic,phone), child:children(full_name,phone)"
+        )
+        .eq("group_id", groupId);
+
+      const rows = (cg ?? []) as unknown as {
+        id: string;
+        subgroup_id: string | null;
+        child_id: string | null;
+        profile: {
+          id: string;
+          first_name: string;
+          last_name: string;
+          patronymic: string | null;
+          phone: string;
+        } | null;
+        child: { full_name: string; phone: string | null } | null;
+      }[];
+
+      // Кто оплатил в этом месяце (по родительскому профилю)
+      const profileIds = rows.map((r) => r.profile?.id).filter(Boolean) as string[];
+      const paidSet = new Set<string>();
+      if (profileIds.length) {
+        const { data: paid } = await supabaseAdmin
+          .from("payments")
+          .select("profile_id")
+          .eq("status", "paid")
+          .gte("created_at", monthStartISO())
+          .in("profile_id", profileIds);
+        (paid ?? []).forEach((p: { profile_id: string }) =>
+          paidSet.add(p.profile_id)
+        );
+      }
+
+      const participants: GroupParticipant[] = rows
+        .filter((r) => r.profile)
+        .map((r) => {
+          const isChild = !!r.child_id && !!r.child;
+          return {
+            cg_id: r.id,
+            name: isChild
+              ? r.child!.full_name
+              : `${r.profile!.last_name} ${r.profile!.first_name}`,
+            phone: (isChild ? r.child!.phone : r.profile!.phone) || "—",
+            subgroup_id: r.subgroup_id ?? null,
+            is_child: isChild,
+            paid: paidSet.has(r.profile!.id),
+          };
+        });
+
+      return {
+        group: group as Group,
+        subgroups: (subgroups ?? []) as Subgroup[],
+        participants,
+      };
+    },
+    null
+  );
 }
 
 export interface PaymentWithClient extends Payment {
@@ -268,6 +418,8 @@ export function getAllLessons(): Promise<LessonAdmin[]> {
 
 export interface RosterEntry {
   profile_id: string;
+  child_id: string | null;
+  is_child: boolean;
   name: string;
   status: Attendance["status"] | null;
 }
@@ -290,38 +442,51 @@ export function getLessonRoster(lessonId: string): Promise<LessonRoster> {
 
       const { data: cg } = await supabaseAdmin
         .from("client_groups")
-        .select("profile:profiles(id,first_name,last_name,patronymic)")
+        .select(
+          "child_id, profile:profiles(id,first_name,last_name,patronymic), child:children(full_name)"
+        )
         .eq("group_id", l.group_id);
 
       const { data: att } = await supabaseAdmin
         .from("attendance")
-        .select("profile_id,status")
+        .select("profile_id,child_id,status")
         .eq("lesson_id", lessonId);
+      const key = (pid: string, cid: string | null) => `${pid}|${cid ?? ""}`;
       const attMap = new Map(
         (att ?? []).map(
-          (a: { profile_id: string; status: Attendance["status"] }) => [
-            a.profile_id,
-            a.status,
-          ]
+          (a: {
+            profile_id: string;
+            child_id: string | null;
+            status: Attendance["status"];
+          }) => [key(a.profile_id, a.child_id ?? null), a.status]
         )
       );
 
       const roster: RosterEntry[] = (
         (cg ?? []) as unknown as {
+          child_id: string | null;
           profile: {
             id: string;
             first_name: string;
             last_name: string;
             patronymic: string | null;
           } | null;
+          child: { full_name: string } | null;
         }[]
       )
         .filter((r) => r.profile)
-        .map((r) => ({
-          profile_id: r.profile!.id,
-          name: `${r.profile!.last_name} ${r.profile!.first_name}`,
-          status: attMap.get(r.profile!.id) ?? null,
-        }));
+        .map((r) => {
+          const isChild = !!r.child_id && !!r.child;
+          return {
+            profile_id: r.profile!.id,
+            child_id: r.child_id ?? null,
+            is_child: isChild,
+            name: isChild
+              ? r.child!.full_name
+              : `${r.profile!.last_name} ${r.profile!.first_name}`,
+            status: attMap.get(key(r.profile!.id, r.child_id ?? null)) ?? null,
+          };
+        });
 
       return {
         lesson: { ...l, group_name: l.group?.name ?? "—", subgroup_name: null },
@@ -332,10 +497,46 @@ export function getLessonRoster(lessonId: string): Promise<LessonRoster> {
   );
 }
 
+/* ---------- Журнал посещений клиента (и его детей) ---------- */
+
+export interface JournalEntry {
+  id: string;
+  date: string;
+  group_name: string;
+  participant: string; // «основной» или имя ребёнка
+  status: Attendance["status"];
+}
+
+export function getClientJournal(profileId: string): Promise<JournalEntry[]> {
+  return safe(async () => {
+    const { data } = await supabaseAdmin
+      .from("attendance")
+      .select(
+        "id, status, marked_at, child:children(full_name), lesson:lessons(date, group:groups(name))"
+      )
+      .eq("profile_id", profileId)
+      .order("marked_at", { ascending: false });
+
+    return ((data ?? []) as unknown as {
+      id: string;
+      status: Attendance["status"];
+      child: { full_name: string } | null;
+      lesson: { date: string; group: { name: string } | null } | null;
+    }[]).map((a) => ({
+      id: a.id,
+      date: a.lesson?.date ?? "",
+      group_name: a.lesson?.group?.name ?? "—",
+      participant: a.child?.full_name ?? "основной",
+      status: a.status,
+    }));
+  }, []);
+}
+
 /* ---------- Детальная карточка клиента (админ) ---------- */
 
 export interface ClientDetail {
   profile: Profile;
+  children: Child[];
   enrolled: EnrolledGroup[];
   payments: Payment[];
   paidThisMonth: boolean;
@@ -355,9 +556,10 @@ export function getClientDetail(profileId: string): Promise<ClientDetail | null>
         .maybeSingle();
       if (!profile) return null;
 
-      const [enrolled, payments] = await Promise.all([
+      const [enrolled, payments, children] = await Promise.all([
         getProfileGroups(profileId),
         getProfilePayments(profileId),
+        getProfileChildren(profileId),
       ]);
 
       const paidThisMonth = payments.some(
@@ -397,6 +599,7 @@ export function getClientDetail(profileId: string): Promise<ClientDetail | null>
 
       return {
         profile: profile as Profile,
+        children,
         enrolled,
         payments,
         paidThisMonth,
@@ -506,6 +709,19 @@ export function getCampById(id: string): Promise<Camp | null> {
   }, null);
 }
 
+/* ---------- Галерея ---------- */
+
+export function getGalleryImages(): Promise<GalleryImage[]> {
+  return safe(async () => {
+    const { data } = await supabaseAdmin
+      .from("gallery")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false });
+    return (data ?? []) as GalleryImage[];
+  }, []);
+}
+
 /* ---------- Шаблоны расписания ---------- */
 
 export interface TemplateRow extends ScheduleTemplate {
@@ -528,6 +744,34 @@ export function getScheduleTemplates(): Promise<TemplateRow[]> {
       group_name: t.group?.name ?? "—",
       subgroup_name: t.subgroup_id ? subs.get(t.subgroup_id) ?? null : null,
     }));
+  }, []);
+}
+
+/** Шаблон-«блокнот»: набор занятий на неделю под одним именем. */
+export interface TemplateSet {
+  name: string;
+  lessons: TemplateRow[];
+}
+
+export function getTemplateSets(): Promise<TemplateSet[]> {
+  return safe(async () => {
+    const rows = await getScheduleTemplates();
+    const byName = new Map<string, TemplateRow[]>();
+    for (const r of rows) {
+      const arr = byName.get(r.name) ?? [];
+      arr.push(r);
+      byName.set(r.name, arr);
+    }
+    return Array.from(byName.entries())
+      .map(([name, lessons]) => ({
+        name,
+        lessons: lessons.sort(
+          (a, b) =>
+            a.day_of_week - b.day_of_week ||
+            a.start_time.localeCompare(b.start_time)
+        ),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, []);
 }
 

@@ -10,6 +10,17 @@ export interface Profile {
   last_name: string;
   patronymic: string | null;
   role: Role;
+  birth_date: string | null;
+  created_at: string;
+}
+
+/** Ребёнок клиента (таблица children, миграция 012). */
+export interface Child {
+  id: string;
+  parent_id: string;
+  full_name: string;
+  phone: string | null;
+  birth_date: string | null;
   created_at: string;
 }
 
@@ -38,12 +49,16 @@ export interface ClientGroup {
   enrolled_at: string;
 }
 
-/** Группа клиента с (опциональной) подгруппой — для ЛК и админки */
+/** Группа клиента с (опциональной) подгруппой — для ЛК и админки.
+ *  Участник: сам клиент (child_id=null) либо его ребёнок (participant_name). */
 export interface EnrolledGroup {
+  cg_id: string;
   group_id: string;
   group_name: string;
   subgroup_id: string | null;
   subgroup_name: string | null;
+  child_id: string | null;
+  participant_name: string | null; // имя ребёнка, либо null = «основной»
 }
 
 export interface Lesson {
@@ -113,6 +128,14 @@ export interface Camp {
   updated_at: string;
 }
 
+export interface GalleryImage {
+  id: string;
+  image_url: string;
+  caption: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface ScheduleTemplate {
   id: string;
   name: string;
@@ -122,6 +145,7 @@ export interface ScheduleTemplate {
   start_time: string;
   end_time: string;
   coach: string;
+  hall: string | null;
   created_at: string;
 }
 

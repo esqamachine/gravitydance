@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { saveCamp, deleteCamp } from "@/app/admin/actions";
 import { slugify } from "@/lib/slug";
 import { formatDate, type Camp } from "@/lib/db";
+import ImageUpload from "./ImageUpload";
 
 const emptyDraft = {
   id: "",
@@ -254,18 +255,17 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
                   className="admin-input"
                 />
               </label>
-              <label className="block">
+              <div className="block">
                 <span className="mb-1 block font-body text-xs text-muted">
-                  Фото (URL)
+                  Фото
                 </span>
-                <input
+                <ImageUpload
                   name="image_url"
-                  value={draft.image_url}
-                  onChange={(e) => set({ image_url: e.target.value })}
-                  placeholder="/images/camps/01.jpg"
-                  className="admin-input"
+                  bucket="camps"
+                  key={draft.id || "new"}
+                  initialUrl={draft.image_url}
                 />
-              </label>
+              </div>
             </div>
 
             <label className="flex cursor-pointer items-center gap-3">

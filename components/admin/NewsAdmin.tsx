@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { saveNews, deleteNews } from "@/app/admin/actions";
 import { slugify } from "@/lib/slug";
 import { formatDate, type News } from "@/lib/db";
+import ImageUpload from "./ImageUpload";
 
 const emptyDraft = {
   id: "",
@@ -209,19 +210,17 @@ export default function NewsAdmin({ news }: { news: News[] }) {
               />
             </label>
 
-            <label className="block">
+            <div>
               <span className="mb-1 block font-body text-xs text-muted">
-                Фото (URL, напр. /images/news/01.jpg)
+                Фото
               </span>
-              <input
+              <ImageUpload
                 name="image_url"
-                value={draft.image_url}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, image_url: e.target.value }))
-                }
-                className="admin-input"
+                bucket="news"
+                key={draft.id || "new"}
+                initialUrl={draft.image_url}
               />
-            </label>
+            </div>
 
             <label className="flex cursor-pointer items-center gap-3">
               <input

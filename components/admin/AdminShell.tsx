@@ -12,6 +12,7 @@ import {
   CreditCard,
   Newspaper,
   Tent,
+  Image as ImageIcon,
   LogOut,
   Home,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const items = [
   { href: "/admin/payments", label: "Платежи", icon: CreditCard },
   { href: "/admin/news", label: "Новости", icon: Newspaper },
   { href: "/admin/camps", label: "Сборы", icon: Tent },
+  { href: "/admin/gallery", label: "Галерея", icon: ImageIcon },
 ];
 
 export default function AdminShell({

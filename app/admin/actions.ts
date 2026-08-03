@@ -3,13 +3,29 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin, digits } from "@/lib/account";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getClientDetail } from "@/lib/queries";
+import {
+  getClientDetail,
+  getGroupDetail,
+  getClientJournal,
+} from "@/lib/queries";
 import { slugify } from "@/lib/slug";
 
 /** Читает подробную карточку клиента (для модалки в админке). */
 export async function getClientDetailAction(profileId: string) {
   await requireAdmin();
   return getClientDetail(profileId);
+}
+
+/** Полный журнал посещений клиента (и его детей). */
+export async function getClientJournalAction(profileId: string) {
+  await requireAdmin();
+  return getClientJournal(profileId);
+}
+
+/** Читает подробности группы с участниками (для модалки в админке). */
+export async function getGroupDetailAction(groupId: string) {
+  await requireAdmin();
+  return getGroupDetail(groupId);
 }
 
 export async function addClient(formData: FormData) {
@@ -70,31 +86,47 @@ export async function enrollClient(formData: FormData) {
   const profile_id = String(formData.get("profile_id") ?? "");
   const group_id = String(formData.get("group_id") ?? "");
   const subgroup_id = String(formData.get("subgroup_id") ?? "").trim() || null;
+  // Участник: сам клиент (пусто) или его ребёнок.
+  const child_id = String(formData.get("child_id") ?? "").trim() || null;
   if (!profile_id || !group_id) return;
 
-  await supabaseAdmin
+  // select-then-write: уникальность — (profile_id, group_id, child_id),
+  // но индекс на COALESCE-выражении, поэтому onConflict тут не подходит.
+  let existing = supabaseAdmin
     .from("client_groups")
-    .upsert(
-      { profile_id, group_id, subgroup_id },
-      { onConflict: "profile_id,group_id" }
-    );
-
-  revalidatePath("/admin/clients");
-}
-
-export async function unenrollClient(formData: FormData) {
-  await requireAdmin();
-  const profile_id = String(formData.get("profile_id") ?? "");
-  const group_id = String(formData.get("group_id") ?? "");
-  if (!profile_id || !group_id) return;
-
-  await supabaseAdmin
-    .from("client_groups")
-    .delete()
+    .select("id")
     .eq("profile_id", profile_id)
     .eq("group_id", group_id);
+  existing = child_id
+    ? existing.eq("child_id", child_id)
+    : existing.is("child_id", null);
+  const { data: found } = await existing.maybeSingle();
+
+  if (found) {
+    await supabaseAdmin
+      .from("client_groups")
+      .update({ subgroup_id })
+      .eq("id", (found as { id: string }).id);
+  } else {
+    await supabaseAdmin
+      .from("client_groups")
+      .insert({ profile_id, group_id, subgroup_id, child_id });
+  }
 
   revalidatePath("/admin/clients");
+  revalidatePath("/admin/groups");
+}
+
+/** Удаляет конкретную запись участника в группе по id строки client_groups. */
+export async function unenrollClient(formData: FormData) {
+  await requireAdmin();
+  const cg_id = String(formData.get("cg_id") ?? "");
+  if (!cg_id) return;
+
+  await supabaseAdmin.from("client_groups").delete().eq("id", cg_id);
+
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/groups");
 }
 
 export async function addManualPayment(formData: FormData) {
@@ -148,6 +180,7 @@ export async function markAttendance(formData: FormData) {
 
   const lesson_id = String(formData.get("lesson_id") ?? "");
   const profile_id = String(formData.get("profile_id") ?? "");
+  const child_id = String(formData.get("child_id") ?? "").trim() || null;
   const status = String(formData.get("status") ?? "present") as
     | "present"
     | "absent"
@@ -155,14 +188,30 @@ export async function markAttendance(formData: FormData) {
 
   if (!lesson_id || !profile_id) return;
 
-  await supabaseAdmin
+  // Уникальность на (lesson, profile, child) с индексом на COALESCE-выражении,
+  // поэтому select-then-write вместо upsert.
+  let q = supabaseAdmin
     .from("attendance")
-    .upsert(
-      { lesson_id, profile_id, status, marked_at: new Date().toISOString() },
-      { onConflict: "lesson_id,profile_id" }
-    );
+    .select("id")
+    .eq("lesson_id", lesson_id)
+    .eq("profile_id", profile_id);
+  q = child_id ? q.eq("child_id", child_id) : q.is("child_id", null);
+  const { data: found } = await q.maybeSingle();
+
+  const marked_at = new Date().toISOString();
+  if (found) {
+    await supabaseAdmin
+      .from("attendance")
+      .update({ status, marked_at })
+      .eq("id", (found as { id: string }).id);
+  } else {
+    await supabaseAdmin
+      .from("attendance")
+      .insert({ lesson_id, profile_id, child_id, status, marked_at });
+  }
 
   revalidatePath("/admin/attendance");
+  revalidatePath("/admin/clients");
 }
 
 /* ---------- Новости ---------- */
@@ -274,6 +323,46 @@ export async function deleteCamp(formData: FormData) {
   revalidatePath("/camps");
 }
 
+/* ---------- Галерея ---------- */
+
+export async function addGalleryImage(formData: FormData) {
+  await requireAdmin();
+  const image_url = String(formData.get("image_url") ?? "").trim();
+  const caption = String(formData.get("caption") ?? "").trim() || null;
+  if (!image_url) return;
+
+  await supabaseAdmin.from("gallery").insert({ image_url, caption });
+
+  revalidatePath("/admin/gallery");
+  revalidatePath("/");
+}
+
+export async function deleteGalleryImage(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const image_url = String(formData.get("image_url") ?? "");
+  if (!id) return;
+
+  await supabaseAdmin.from("gallery").delete().eq("id", id);
+
+  // Пытаемся удалить и сам файл из Storage (bucket gallery).
+  const marker = "/gallery/";
+  const idx = image_url.indexOf(marker);
+  if (idx !== -1) {
+    const path = image_url.slice(idx + marker.length);
+    if (path) {
+      try {
+        await supabaseAdmin.storage.from("gallery").remove([path]);
+      } catch {
+        /* файл мог быть внешним URL — игнорируем */
+      }
+    }
+  }
+
+  revalidatePath("/admin/gallery");
+  revalidatePath("/");
+}
+
 /* ---------- Шаблоны расписания ---------- */
 
 export async function saveTemplate(formData: FormData) {
@@ -304,6 +393,147 @@ export async function deleteTemplate(formData: FormData) {
   if (!id) return;
   await supabaseAdmin.from("schedule_templates").delete().eq("id", id);
   revalidatePath("/admin/templates");
+}
+
+/* ---------- Шаблон-«блокнот» (набор занятий под одним именем) ---------- */
+
+interface TemplateLessonInput {
+  group_id: string;
+  subgroup_id: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  coach: string;
+  hall: string | null;
+}
+
+/** Сохраняет весь шаблон: удаляет прежние строки этого имени и вставляет заново. */
+export async function saveTemplateSet(formData: FormData) {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  const originalName = String(formData.get("original_name") ?? "").trim();
+  let lessons: TemplateLessonInput[] = [];
+  try {
+    lessons = JSON.parse(String(formData.get("lessons") ?? "[]"));
+  } catch {
+    return;
+  }
+  if (!name) return;
+
+  // Удаляем прежние строки (по старому имени при переименовании и по новому).
+  const names = [name, originalName].filter(Boolean);
+  await supabaseAdmin.from("schedule_templates").delete().in("name", names);
+
+  const rows = lessons
+    .filter(
+      (l) =>
+        l.group_id && l.day_of_week && l.start_time && l.end_time && l.coach
+    )
+    .map((l) => ({
+      name,
+      group_id: l.group_id,
+      subgroup_id: l.subgroup_id || null,
+      day_of_week: l.day_of_week,
+      start_time: l.start_time,
+      end_time: l.end_time,
+      coach: l.coach,
+      hall: l.hall || null,
+    }));
+
+  if (rows.length) {
+    await supabaseAdmin.from("schedule_templates").insert(rows);
+  }
+
+  revalidatePath("/admin/templates");
+}
+
+/** Удаляет весь шаблон (все строки этого имени). */
+export async function deleteTemplateSet(formData: FormData) {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  await supabaseAdmin.from("schedule_templates").delete().eq("name", name);
+  revalidatePath("/admin/templates");
+}
+
+/** 1=Пн … 7=Вс из ISO-даты. */
+function dowOf(iso: string): number {
+  const d = new Date(iso + "T00:00:00");
+  return ((d.getDay() + 6) % 7) + 1;
+}
+
+/** Применяет шаблон на месяц вперёд: создаёт занятия в lessons на каждый
+ *  соответствующий день недели (от сегодня, 31 день). Пропускает дубликаты. */
+export async function applyTemplateMonth(
+  name: string
+): Promise<{ created: number; skipped: number }> {
+  await requireAdmin();
+  if (!name) return { created: 0, skipped: 0 };
+
+  const { data: tpls } = await supabaseAdmin
+    .from("schedule_templates")
+    .select("*")
+    .eq("name", name);
+  const rows = (tpls ?? []) as {
+    group_id: string;
+    subgroup_id: string | null;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    coach: string;
+    hall: string | null;
+  }[];
+  if (rows.length === 0) return { created: 0, skipped: 0 };
+
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(now.getDate()).padStart(2, "0")}`;
+  const dates = Array.from({ length: 31 }, (_, i) => addDaysISO(todayISO, i));
+
+  const { data: existing } = await supabaseAdmin
+    .from("lessons")
+    .select("group_id,date,start_time")
+    .in("date", dates);
+  const seen = new Set(
+    (existing ?? []).map(
+      (e: { group_id: string; date: string; start_time: string }) =>
+        `${e.group_id}|${e.date}|${e.start_time}`
+    )
+  );
+
+  const toInsert: Record<string, unknown>[] = [];
+  for (const date of dates) {
+    const dow = dowOf(date);
+    for (const t of rows) {
+      if (t.day_of_week !== dow) continue;
+      const key = `${t.group_id}|${date}|${t.start_time}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      toInsert.push({
+        group_id: t.group_id,
+        subgroup_id: t.subgroup_id ?? null,
+        date,
+        start_time: t.start_time,
+        end_time: t.end_time,
+        coach_name: t.coach,
+      });
+    }
+  }
+
+  let created = 0;
+  if (toInsert.length) {
+    const { data, error } = await supabaseAdmin
+      .from("lessons")
+      .insert(toInsert)
+      .select("id");
+    if (!error) created = data?.length ?? 0;
+  }
+
+  revalidatePath("/admin/schedule");
+  revalidatePath("/admin/attendance");
+  return { created, skipped: toInsert.length - created };
 }
 
 /* ---------- Генерация недели по шаблонам ---------- */

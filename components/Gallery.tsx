@@ -5,15 +5,16 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import Reveal from "./Reveal";
 
-/** Пути к фото галереи: 01.jpg … 50.jpg */
-const galleryPaths = Array.from(
+/** Статичные пути-фолбэк: 01.jpg … 50.jpg (если в БД галерея пуста). */
+const staticPaths = Array.from(
   { length: 50 },
   (_, i) => `/images/gallery/${String(i + 1).padStart(2, "0")}.jpg`
 );
 
 const SPEED = 28; // px в секунду (~1px за 35ms)
 
-export default function Gallery() {
+export default function Gallery({ images }: { images?: string[] }) {
+  const galleryPaths = images && images.length > 0 ? images : staticPaths;
   const [failed, setFailed] = useState<Set<number>>(new Set());
   const [paused, setPaused] = useState(false);
   const [duration, setDuration] = useState(600);
