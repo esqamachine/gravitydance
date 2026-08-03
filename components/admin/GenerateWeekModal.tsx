@@ -45,8 +45,8 @@ export default function GenerateWeekModal({
     return templates
       .map((t) => ({
         id: t.id,
-        date: addDays(monday, t.day_of_week - 1),
-        dow: DOW_RU[t.day_of_week - 1],
+        date: addDays(monday, (t.day_of_week ?? 1) - 1),
+        dow: DOW_RU[(t.day_of_week ?? 1) - 1],
         time: `${hm(t.start_time)}–${hm(t.end_time)}`,
         group: t.group_name,
         coach: t.coach,

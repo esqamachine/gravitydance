@@ -10,6 +10,8 @@ import {
   CalendarClock,
   CalendarPlus,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   saveTemplateSet,
@@ -17,10 +19,8 @@ import {
   applyTemplateMonth,
 } from "@/app/admin/actions";
 import { coaches } from "@/lib/coaches";
-import { DOW_RU, type Group, type Subgroup } from "@/lib/db";
+import { groupColor, type Group, type Subgroup } from "@/lib/db";
 import type { TemplateSet } from "@/lib/queries";
-
-const DOW_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const TIME_SLOTS: string[] = (() => {
   const s: string[] = [];
@@ -34,15 +34,39 @@ const TIME_SLOTS: string[] = (() => {
   return s;
 })();
 
+const MONTHS = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+const WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
 const hm = (t: string) => t.slice(0, 5);
+const iso = (y: number, m: number, d: number) =>
+  `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/** «2026-08-14» → «14 авг» */
+function shortDate(d: string): string {
+  const [y, mo, da] = d.split("-").map(Number);
+  return `${da} ${MONTHS[mo - 1].slice(0, 3).toLowerCase()} ${y !== new Date().getFullYear() ? y : ""}`.trim();
+}
 
 type LessonDraft = {
   key: string;
-  group_id: string;
-  subgroup_id: string;
-  day_of_week: number;
+  date: string;
   start_time: string;
   end_time: string;
+  group_id: string;
+  subgroup_id: string;
   coach: string;
   hall: string;
 };
@@ -64,15 +88,20 @@ export default function TemplatesAdmin({
   const [name, setName] = useState("");
   const [originalName, setOriginalName] = useState("");
   const [lessons, setLessons] = useState<LessonDraft[]>([]);
-  const [activeDay, setActiveDay] = useState(1);
+  const now = new Date();
+  const [viewY, setViewY] = useState(now.getFullYear());
+  const [viewM, setViewM] = useState(now.getMonth());
   const [pending, startTransition] = useTransition();
   const [applyingName, setApplyingName] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   const openNew = () => {
     setName("");
     setOriginalName("");
     setLessons([]);
-    setActiveDay(1);
+    setViewY(now.getFullYear());
+    setViewM(now.getMonth());
+    setError("");
     setEditing(true);
   };
 
@@ -82,29 +111,35 @@ export default function TemplatesAdmin({
     setLessons(
       set.lessons.map((l) => ({
         key: newKey(),
-        group_id: l.group_id,
-        subgroup_id: l.subgroup_id ?? "",
-        day_of_week: l.day_of_week,
+        date: l.lesson_date ?? "",
         start_time: hm(l.start_time),
         end_time: hm(l.end_time),
+        group_id: l.group_id,
+        subgroup_id: l.subgroup_id ?? "",
         coach: l.coach,
         hall: l.hall ?? "",
       }))
     );
-    setActiveDay(set.lessons[0]?.day_of_week ?? 1);
+    const first = set.lessons.find((l) => l.lesson_date)?.lesson_date;
+    if (first) {
+      const [y, m] = first.split("-").map(Number);
+      setViewY(y);
+      setViewM(m - 1);
+    }
+    setError("");
     setEditing(true);
   };
 
-  const addLesson = () =>
+  const addLessonOn = (date: string) =>
     setLessons((ls) => [
       ...ls,
       {
         key: newKey(),
-        group_id: "",
-        subgroup_id: "",
-        day_of_week: activeDay,
+        date,
         start_time: "17:00",
         end_time: "18:00",
+        group_id: "",
+        subgroup_id: "",
         coach: "",
         hall: "",
       },
@@ -118,13 +153,14 @@ export default function TemplatesAdmin({
 
   const save = () =>
     startTransition(async () => {
-      if (!name.trim()) return;
+      setError("");
+      if (!name.trim()) return setError("Укажите название шаблона");
       const payload = lessons
-        .filter((l) => l.group_id && l.coach)
+        .filter((l) => l.date && l.group_id && l.coach)
         .map((l) => ({
+          date: l.date,
           group_id: l.group_id,
           subgroup_id: l.subgroup_id || null,
-          day_of_week: l.day_of_week,
           start_time: l.start_time,
           end_time: l.end_time,
           coach: l.coach,
@@ -134,7 +170,11 @@ export default function TemplatesAdmin({
       fd.set("name", name.trim());
       fd.set("original_name", originalName);
       fd.set("lessons", JSON.stringify(payload));
-      await saveTemplateSet(fd);
+      const res = await saveTemplateSet(fd);
+      if (res && res.ok === false) {
+        setError(res.error || "Не удалось сохранить");
+        return;
+      }
       setEditing(false);
       router.refresh();
     });
@@ -154,12 +194,39 @@ export default function TemplatesAdmin({
       const res = await applyTemplateMonth(n);
       setApplyingName(null);
       alert(
-        `Готово: создано занятий — ${res.created}, пропущено (уже были) — ${res.skipped}.`
+        `Готово: создано занятий — ${res.created}, пропущено — ${res.skipped}. Даты вне ближайших 31 дня не применяются.`
       );
       router.refresh();
     });
 
-  const dayLessons = lessons.filter((l) => l.day_of_week === activeDay);
+  // Сетка месяца (Пн-первый)
+  const firstDow = ((new Date(viewY, viewM, 1).getDay() + 6) % 7); // 0=Пн
+  const daysInMonth = new Date(viewY, viewM + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const countOn = (date: string) =>
+    lessons.filter((l) => l.date === date).length;
+  const todayISO = iso(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const prevMonth = () => {
+    if (viewM === 0) {
+      setViewM(11);
+      setViewY((y) => y - 1);
+    } else setViewM((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewM === 11) {
+      setViewM(0);
+      setViewY((y) => y + 1);
+    } else setViewM((m) => m + 1);
+  };
+
+  const sortedLessons = [...lessons].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)
+  );
 
   return (
     <div className="space-y-4">
@@ -174,60 +241,69 @@ export default function TemplatesAdmin({
 
       {templateSets.length === 0 ? (
         <div className="rounded-[1.75rem] border border-white/10 bg-card p-10 text-center font-body text-muted">
-          Шаблонов пока нет. Создайте шаблон-«блокнот» с занятиями на неделю и
-          применяйте его на месяц одной кнопкой.
+          Шаблонов пока нет. Создайте шаблон: отметьте нужные даты в календаре и
+          заполните занятия, затем применяйте на месяц одной кнопкой.
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {templateSets.map((set) => (
-            <div
-              key={set.name}
-              className="rounded-2xl border border-white/10 bg-card p-5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-ink">
-                  <CalendarClock size={18} className="text-primary" />
-                  {set.name}
-                </h3>
-                <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-0.5 font-body text-xs font-semibold text-primary-light">
-                  {set.lessons.length} занят.
-                </span>
+          {templateSets.map((set) => {
+            const dates = Array.from(
+              new Set(set.lessons.map((l) => l.lesson_date).filter(Boolean))
+            ) as string[];
+            return (
+              <div
+                key={set.name}
+                className="rounded-2xl border border-white/10 bg-card p-5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-ink">
+                    <CalendarClock size={18} className="text-primary" />
+                    {set.name}
+                  </h3>
+                  <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-0.5 font-body text-xs font-semibold text-primary-light">
+                    {set.lessons.length} занят.
+                  </span>
+                </div>
+                <p className="mt-2 font-body text-xs text-muted">
+                  {dates.length
+                    ? `${dates.length} дат: ` +
+                      dates
+                        .slice(0, 4)
+                        .map(shortDate)
+                        .join(", ") +
+                      (dates.length > 4 ? "…" : "")
+                    : "нет дат"}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => apply(set.name)}
+                    disabled={pending}
+                    className="btn-cta inline-flex items-center gap-1.5 px-3 py-1.5 font-heading text-xs font-bold disabled:opacity-50"
+                  >
+                    {applyingName === set.name ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <CalendarPlus size={13} />
+                    )}
+                    Применить на месяц
+                  </button>
+                  <button
+                    onClick={() => openEdit(set)}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 font-body text-xs text-ink transition hover:border-primary/40"
+                  >
+                    <Pencil size={13} /> Изменить
+                  </button>
+                  <button
+                    onClick={() => remove(set.name)}
+                    disabled={pending}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 font-body text-xs text-pink transition hover:border-pink/40 disabled:opacity-50"
+                  >
+                    <Trash2 size={13} /> Удалить
+                  </button>
+                </div>
               </div>
-              <p className="mt-2 font-body text-xs text-muted">
-                {Array.from(new Set(set.lessons.map((l) => l.day_of_week)))
-                  .sort((a, b) => a - b)
-                  .map((d) => DOW_SHORT[d - 1])
-                  .join(", ") || "нет занятий"}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={() => apply(set.name)}
-                  disabled={pending}
-                  className="btn-cta inline-flex items-center gap-1.5 px-3 py-1.5 font-heading text-xs font-bold disabled:opacity-50"
-                >
-                  {applyingName === set.name ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : (
-                    <CalendarPlus size={13} />
-                  )}
-                  Применить на месяц
-                </button>
-                <button
-                  onClick={() => openEdit(set)}
-                  className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 font-body text-xs text-ink transition hover:border-primary/40"
-                >
-                  <Pencil size={13} /> Изменить
-                </button>
-                <button
-                  onClick={() => remove(set.name)}
-                  disabled={pending}
-                  className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 font-body text-xs text-pink transition hover:border-pink/40 disabled:opacity-50"
-                >
-                  <Trash2 size={13} /> Удалить
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -268,59 +344,127 @@ export default function TemplatesAdmin({
               />
             </label>
 
-            {/* Вкладки дней */}
-            <div className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto">
-              {DOW_SHORT.map((d, i) => {
-                const day = i + 1;
-                const count = lessons.filter(
-                  (l) => l.day_of_week === day
-                ).length;
-                return (
-                  <button
-                    key={day}
-                    onClick={() => setActiveDay(day)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 font-heading text-sm font-semibold transition ${
-                      activeDay === day
-                        ? "btn-cta"
-                        : "border border-white/10 bg-white/5 text-muted hover:text-ink"
-                    }`}
+            {/* Календарь */}
+            <div className="mt-4 rounded-2xl border border-white/10 bg-surface p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={prevMonth}
+                  aria-label="Предыдущий месяц"
+                  className="rounded-full p-1.5 text-muted transition hover:bg-white/5 hover:text-ink"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="font-heading text-sm font-bold text-ink">
+                  {MONTHS[viewM]} {viewY}
+                </span>
+                <button
+                  type="button"
+                  onClick={nextMonth}
+                  aria-label="Следующий месяц"
+                  className="rounded-full p-1.5 text-muted transition hover:bg-white/5 hover:text-ink"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {WD.map((w) => (
+                  <div
+                    key={w}
+                    className="py-1 font-body text-[11px] font-medium text-muted"
                   >
-                    {d}
-                    {count > 0 && (
-                      <span
-                        className={
-                          activeDay === day ? "text-white/80" : "text-primary-light"
-                        }
-                      >
-                        {" "}
-                        · {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                    {w}
+                  </div>
+                ))}
+                {cells.map((d, i) => {
+                  if (d === null) return <div key={`e${i}`} />;
+                  const date = iso(viewY, viewM, d);
+                  const cnt = countOn(date);
+                  const isToday = date === todayISO;
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => addLessonOn(date)}
+                      className={`relative aspect-square rounded-lg font-body text-sm transition ${
+                        cnt > 0
+                          ? "bg-brand-gradient font-bold text-white"
+                          : "text-ink hover:bg-white/10"
+                      } ${isToday && cnt === 0 ? "ring-1 ring-primary" : ""}`}
+                    >
+                      {d}
+                      {cnt > 0 && (
+                        <span className="absolute right-0.5 top-0.5 rounded-full bg-white/90 px-1 text-[9px] font-bold text-[#0D1428]">
+                          {cnt}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 font-body text-[11px] text-muted">
+                Нажмите на дату, чтобы добавить занятие в этот день.
+              </p>
             </div>
 
-            {/* Занятия активного дня */}
-            <div className="mt-4 max-h-[46vh] space-y-3 overflow-y-auto pr-1">
-              <p className="font-body text-xs text-muted">
-                {DOW_RU[activeDay - 1]}
-              </p>
-              {dayLessons.length === 0 ? (
+            {/* Занятия по датам */}
+            <div className="mt-4 max-h-[40vh] space-y-3 overflow-y-auto pr-1">
+              {sortedLessons.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-white/15 py-6 text-center font-body text-sm text-muted">
-                  В этот день занятий нет.
+                  Пока нет занятий. Выберите даты в календаре выше.
                 </p>
               ) : (
-                dayLessons.map((l) => {
+                sortedLessons.map((l) => {
                   const subs = l.group_id
                     ? subgroupsByGroup[l.group_id] ?? []
                     : [];
+                  const gName =
+                    groups.find((g) => g.id === l.group_id)?.name ?? "";
+                  const color = gName ? groupColor(gName) : "transparent";
                   return (
                     <div
                       key={l.key}
-                      className="rounded-2xl border border-white/10 bg-surface p-3"
+                      style={{ borderLeftColor: color }}
+                      className="rounded-2xl border border-l-4 border-white/10 bg-surface p-3"
                     >
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="font-heading text-sm font-bold text-ink">
+                          {shortDate(l.date)}
+                        </span>
+                        <button
+                          onClick={() => removeLesson(l.key)}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-body text-xs text-pink transition hover:bg-pink/10"
+                        >
+                          <Trash2 size={13} /> Удалить
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={l.start_time}
+                          onChange={(e) =>
+                            patch(l.key, { start_time: e.target.value })
+                          }
+                          className="admin-input"
+                        >
+                          {TIME_SLOTS.map((t) => (
+                            <option key={t} value={t}>
+                              с {t}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={l.end_time}
+                          onChange={(e) =>
+                            patch(l.key, { end_time: e.target.value })
+                          }
+                          className="admin-input"
+                        >
+                          {TIME_SLOTS.map((t) => (
+                            <option key={t} value={t}>
+                              до {t}
+                            </option>
+                          ))}
+                        </select>
                         <select
                           value={l.group_id}
                           onChange={(e) =>
@@ -329,6 +473,7 @@ export default function TemplatesAdmin({
                               subgroup_id: "",
                             })
                           }
+                          style={{ borderLeft: `4px solid ${color}` }}
                           className="admin-input"
                         >
                           <option value="">Группа…</option>
@@ -350,32 +495,6 @@ export default function TemplatesAdmin({
                           {subs.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={l.start_time}
-                          onChange={(e) =>
-                            patch(l.key, { start_time: e.target.value })
-                          }
-                          className="admin-input"
-                        >
-                          {TIME_SLOTS.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={l.end_time}
-                          onChange={(e) =>
-                            patch(l.key, { end_time: e.target.value })
-                          }
-                          className="admin-input"
-                        >
-                          {TIME_SLOTS.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
                             </option>
                           ))}
                         </select>
@@ -402,26 +521,17 @@ export default function TemplatesAdmin({
                           className="admin-input"
                         />
                       </div>
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          onClick={() => removeLesson(l.key)}
-                          className="inline-flex items-center gap-1 rounded-full px-3 py-1 font-body text-xs text-pink transition hover:bg-pink/10"
-                        >
-                          <Trash2 size={13} /> Удалить занятие
-                        </button>
-                      </div>
                     </div>
                   );
                 })
               )}
-
-              <button
-                onClick={addLesson}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-4 py-2 font-heading text-sm font-semibold text-ink transition hover:border-primary/40"
-              >
-                <Plus size={15} /> Добавить занятие
-              </button>
             </div>
+
+            {error && (
+              <p className="mt-3 text-center font-body text-sm text-pink">
+                {error}
+              </p>
+            )}
 
             <div className="mt-5 flex gap-3 border-t border-white/10 pt-4">
               <button

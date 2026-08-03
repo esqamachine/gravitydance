@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   monthStartISO,
+  paidCutoffISO,
   type Group,
   type Lesson,
   type Payment,
@@ -129,7 +130,7 @@ export function hasPaidThisMonth(profileId: string): Promise<boolean> {
       .select("id")
       .eq("profile_id", profileId)
       .eq("status", "paid")
-      .gte("created_at", monthStartISO())
+      .gte("created_at", paidCutoffISO())
       .limit(1);
     return (data ?? []).length > 0;
   }, false);
@@ -216,7 +217,7 @@ export function getAllProfiles(): Promise<ProfileRow[]> {
       .from("payments")
       .select("profile_id")
       .eq("status", "paid")
-      .gte("created_at", monthStartISO());
+      .gte("created_at", paidCutoffISO());
     const paidSet = new Set(
       (paid ?? []).map((p: { profile_id: string }) => p.profile_id)
     );
@@ -340,7 +341,7 @@ export function getGroupDetail(groupId: string): Promise<GroupDetail | null> {
           .from("payments")
           .select("profile_id")
           .eq("status", "paid")
-          .gte("created_at", monthStartISO())
+          .gte("created_at", paidCutoffISO())
           .in("profile_id", profileIds);
         (paid ?? []).forEach((p: { profile_id: string }) =>
           paidSet.add(p.profile_id)
@@ -563,7 +564,7 @@ export function getClientDetail(profileId: string): Promise<ClientDetail | null>
       ]);
 
       const paidThisMonth = payments.some(
-        (p) => p.status === "paid" && p.created_at >= monthStartISO()
+        (p) => p.status === "paid" && p.created_at >= paidCutoffISO()
       );
 
       const groupIds = enrolled.map((e) => e.group_id);
@@ -735,7 +736,7 @@ export function getScheduleTemplates(): Promise<TemplateRow[]> {
     const { data } = await supabaseAdmin
       .from("schedule_templates")
       .select("*, group:groups(name)")
-      .order("day_of_week", { ascending: true })
+      .order("lesson_date", { ascending: true, nullsFirst: false })
       .order("start_time", { ascending: true });
     return ((data ?? []) as (ScheduleTemplate & {
       group: { name: string } | null;
@@ -767,7 +768,7 @@ export function getTemplateSets(): Promise<TemplateSet[]> {
         name,
         lessons: lessons.sort(
           (a, b) =>
-            a.day_of_week - b.day_of_week ||
+            (a.lesson_date ?? "").localeCompare(b.lesson_date ?? "") ||
             a.start_time.localeCompare(b.start_time)
         ),
       }))

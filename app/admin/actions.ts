@@ -398,16 +398,23 @@ export async function deleteTemplate(formData: FormData) {
 /* ---------- Шаблон-«блокнот» (набор занятий под одним именем) ---------- */
 
 interface TemplateLessonInput {
+  date: string; // YYYY-MM-DD — конкретная дата занятия
   group_id: string;
   subgroup_id: string | null;
-  day_of_week: number;
   start_time: string;
   end_time: string;
   coach: string;
   hall: string | null;
 }
 
-/** Сохраняет весь шаблон: удаляет прежние строки этого имени и вставляет заново. */
+/** 1=Пн … 7=Вс из ISO-даты. */
+function dowOf(iso: string): number {
+  const d = new Date(iso + "T00:00:00");
+  return ((d.getDay() + 6) % 7) + 1;
+}
+
+/** Сохраняет весь шаблон: удаляет прежние строки этого имени и вставляет заново.
+ *  Каждое занятие привязано к конкретной дате (lesson_date). */
 export async function saveTemplateSet(formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
@@ -415,25 +422,34 @@ export async function saveTemplateSet(formData: FormData) {
   let lessons: TemplateLessonInput[] = [];
   try {
     lessons = JSON.parse(String(formData.get("lessons") ?? "[]"));
-  } catch {
-    return;
+  } catch (e) {
+    console.error("[saveTemplateSet] bad lessons JSON:", e);
+    return { ok: false, error: "Некорректные данные занятий" };
   }
-  if (!name) return;
+  if (!name) return { ok: false, error: "Укажите название шаблона" };
 
   // Удаляем прежние строки (по старому имени при переименовании и по новому).
-  const names = [name, originalName].filter(Boolean);
-  await supabaseAdmin.from("schedule_templates").delete().in("name", names);
+  const names = Array.from(new Set([name, originalName].filter(Boolean)));
+  const { error: delErr } = await supabaseAdmin
+    .from("schedule_templates")
+    .delete()
+    .in("name", names);
+  if (delErr) {
+    console.error("[saveTemplateSet] delete:", delErr);
+    return { ok: false, error: delErr.message };
+  }
 
   const rows = lessons
     .filter(
       (l) =>
-        l.group_id && l.day_of_week && l.start_time && l.end_time && l.coach
+        l.date && l.group_id && l.start_time && l.end_time && l.coach
     )
     .map((l) => ({
       name,
       group_id: l.group_id,
       subgroup_id: l.subgroup_id || null,
-      day_of_week: l.day_of_week,
+      lesson_date: l.date,
+      day_of_week: dowOf(l.date),
       start_time: l.start_time,
       end_time: l.end_time,
       coach: l.coach,
@@ -441,10 +457,17 @@ export async function saveTemplateSet(formData: FormData) {
     }));
 
   if (rows.length) {
-    await supabaseAdmin.from("schedule_templates").insert(rows);
+    const { error: insErr } = await supabaseAdmin
+      .from("schedule_templates")
+      .insert(rows);
+    if (insErr) {
+      console.error("[saveTemplateSet] insert:", insErr);
+      return { ok: false, error: insErr.message };
+    }
   }
 
   revalidatePath("/admin/templates");
+  return { ok: true, count: rows.length };
 }
 
 /** Удаляет весь шаблон (все строки этого имени). */
@@ -456,14 +479,8 @@ export async function deleteTemplateSet(formData: FormData) {
   revalidatePath("/admin/templates");
 }
 
-/** 1=Пн … 7=Вс из ISO-даты. */
-function dowOf(iso: string): number {
-  const d = new Date(iso + "T00:00:00");
-  return ((d.getDay() + 6) % 7) + 1;
-}
-
-/** Применяет шаблон на месяц вперёд: создаёт занятия в lessons на каждый
- *  соответствующий день недели (от сегодня, 31 день). Пропускает дубликаты. */
+/** Применяет шаблон: разворачивает занятия по датам шаблона в реальные lessons
+ *  на 31 день вперёд от сегодня. Пропускает дубликаты и даты вне окна. */
 export async function applyTemplateMonth(
   name: string
 ): Promise<{ created: number; skipped: number }> {
@@ -477,7 +494,7 @@ export async function applyTemplateMonth(
   const rows = (tpls ?? []) as {
     group_id: string;
     subgroup_id: string | null;
-    day_of_week: number;
+    lesson_date: string | null;
     start_time: string;
     end_time: string;
     coach: string;
@@ -490,12 +507,21 @@ export async function applyTemplateMonth(
     2,
     "0"
   )}-${String(now.getDate()).padStart(2, "0")}`;
-  const dates = Array.from({ length: 31 }, (_, i) => addDaysISO(todayISO, i));
+  const endISO = addDaysISO(todayISO, 31);
 
-  const { data: existing } = await supabaseAdmin
-    .from("lessons")
-    .select("group_id,date,start_time")
-    .in("date", dates);
+  // Даты, которые реально применяем (в окне [сегодня, +31], есть дата)
+  const dated = rows.filter(
+    (t) => t.lesson_date && t.lesson_date >= todayISO && t.lesson_date <= endISO
+  );
+
+  const dates = Array.from(new Set(dated.map((t) => t.lesson_date as string)));
+  const { data: existing } =
+    dates.length > 0
+      ? await supabaseAdmin
+          .from("lessons")
+          .select("group_id,date,start_time")
+          .in("date", dates)
+      : { data: [] };
   const seen = new Set(
     (existing ?? []).map(
       (e: { group_id: string; date: string; start_time: string }) =>
@@ -504,22 +530,19 @@ export async function applyTemplateMonth(
   );
 
   const toInsert: Record<string, unknown>[] = [];
-  for (const date of dates) {
-    const dow = dowOf(date);
-    for (const t of rows) {
-      if (t.day_of_week !== dow) continue;
-      const key = `${t.group_id}|${date}|${t.start_time}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      toInsert.push({
-        group_id: t.group_id,
-        subgroup_id: t.subgroup_id ?? null,
-        date,
-        start_time: t.start_time,
-        end_time: t.end_time,
-        coach_name: t.coach,
-      });
-    }
+  for (const t of dated) {
+    const date = t.lesson_date as string;
+    const key = `${t.group_id}|${date}|${t.start_time}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    toInsert.push({
+      group_id: t.group_id,
+      subgroup_id: t.subgroup_id ?? null,
+      date,
+      start_time: t.start_time,
+      end_time: t.end_time,
+      coach_name: t.coach,
+    });
   }
 
   let created = 0;
@@ -533,7 +556,7 @@ export async function applyTemplateMonth(
 
   revalidatePath("/admin/schedule");
   revalidatePath("/admin/attendance");
-  return { created, skipped: toInsert.length - created };
+  return { created, skipped: dated.length - created };
 }
 
 /* ---------- Генерация недели по шаблонам ---------- */

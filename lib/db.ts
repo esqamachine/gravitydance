@@ -79,6 +79,15 @@ export function monthStartISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+/** Порог «недавней оплаты»: 31 день назад (скользящее окно = активный абонемент).
+ *  Оплата в конце месяца не должна «сгорать» 1-го числа следующего. */
+export function paidCutoffISO(): string {
+  const d = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
 export interface Attendance {
   id: string;
   lesson_id: string;
@@ -141,12 +150,28 @@ export interface ScheduleTemplate {
   name: string;
   group_id: string;
   subgroup_id: string | null;
-  day_of_week: number; // 1=Пн … 7=Вс
+  lesson_date: string | null; // конкретная дата занятия (YYYY-MM-DD)
+  day_of_week: number | null; // производный: 1=Пн … 7=Вс
   start_time: string;
   end_time: string;
   coach: string;
   hall: string | null;
   created_at: string;
+}
+
+/** Цвета групп для селектов/акцентов в шаблонах (палитра из ТЗ). */
+export const GROUP_COLORS: Record<string, string> = {
+  Малыши: "#F59E0B",
+  Начинающие: "#8B5CF6",
+  Продолжающие: "#3B82F6",
+  ПРО: "#EC4899",
+  "ПРО МАКС": "#06B6D4",
+  Растяжка: "#A78BFA",
+  Индивидуальные: "#F97316",
+};
+
+export function groupColor(name: string): string {
+  return GROUP_COLORS[name] ?? "#8A9ABF";
 }
 
 /** 1=Понедельник … 7=Воскресенье */
