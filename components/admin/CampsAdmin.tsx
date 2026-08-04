@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import { saveCamp, deleteCamp } from "@/app/admin/actions";
 import { slugify } from "@/lib/slug";
 import { formatDate, type Camp } from "@/lib/db";
@@ -37,22 +38,42 @@ function toDraft(c: Camp): Draft {
 }
 
 export default function CampsAdmin({ camps }: { camps: Camp[] }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [slugTouched, setSlugTouched] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
 
   const openNew = () => {
     setDraft(emptyDraft);
     setSlugTouched(false);
+    setError("");
     setOpen(true);
   };
   const openEdit = (c: Camp) => {
     setDraft(toDraft(c));
     setSlugTouched(true);
+    setError("");
     setOpen(true);
   };
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startTransition(async () => {
+      setError("");
+      const res = await saveCamp(fd);
+      if (res && res.ok === false) {
+        setError(res.error || "Не удалось сохранить");
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -135,8 +156,7 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
           onClick={() => setOpen(false)}
         >
           <form
-            action={saveCamp}
-            onSubmit={() => setTimeout(() => setOpen(false), 50)}
+            onSubmit={handleSubmit}
             onClick={(e) => e.stopPropagation()}
             className="animate-pop-in my-4 w-full max-w-lg space-y-3 rounded-[1.75rem] border border-white/10 bg-card p-6 shadow-2xl"
           >
@@ -217,7 +237,7 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="mb-1 block font-body text-xs text-muted">
-                  Дата начала
+                  Дата начала (необязательно)
                 </span>
                 <input
                   type="date"
@@ -229,7 +249,7 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
               </label>
               <label className="block">
                 <span className="mb-1 block font-body text-xs text-muted">
-                  Дата окончания
+                  Дата окончания (необязательно)
                 </span>
                 <input
                   type="date"
@@ -244,7 +264,7 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="mb-1 block font-body text-xs text-muted">
-                  Стоимость, ₽
+                  Стоимость, ₽ (необязательно)
                 </span>
                 <input
                   type="number"
@@ -279,6 +299,12 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
               <span className="font-body text-sm text-ink">Опубликовать</span>
             </label>
 
+            {error && (
+              <p className="text-center font-body text-sm text-pink">
+                {error}
+              </p>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -289,8 +315,10 @@ export default function CampsAdmin({ camps }: { camps: Camp[] }) {
               </button>
               <button
                 type="submit"
-                className="btn-cta flex-1 px-6 py-3 font-heading text-sm font-bold"
+                disabled={pending}
+                className="btn-cta flex flex-1 items-center justify-center gap-2 px-6 py-3 font-heading text-sm font-bold disabled:opacity-60"
               >
+                {pending ? <Loader2 size={16} className="animate-spin" /> : null}
                 Сохранить
               </button>
             </div>

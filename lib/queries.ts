@@ -27,12 +27,6 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
-}
 
 /* ---------- Подгруппы ---------- */
 
@@ -568,35 +562,42 @@ export function getClientDetail(profileId: string): Promise<ClientDetail | null>
       );
 
       const groupIds = enrolled.map((e) => e.group_id);
-      const today = todayISO();
       const ms = monthStartISO();
+      // Начало следующего месяца — верхняя граница «текущего месяца».
+      const _d = new Date();
+      const nextMs = `${
+        _d.getMonth() === 11 ? _d.getFullYear() + 1 : _d.getFullYear()
+      }-${String(((_d.getMonth() + 1) % 12) + 1).padStart(2, "0")}-01`;
 
-      let totalAllTime = 0;
+      // Y = сколько занятий у групп клиента в текущем месяце (всего по расписанию).
       let totalThisMonth = 0;
       if (groupIds.length) {
-        const { data: occurred } = await supabaseAdmin
+        const { count } = await supabaseAdmin
           .from("lessons")
-          .select("date")
+          .select("id", { count: "exact", head: true })
           .in("group_id", groupIds)
           .neq("status", "cancelled")
-          .lte("date", today);
-        const rows = (occurred ?? []) as { date: string }[];
-        totalAllTime = rows.length;
-        totalThisMonth = rows.filter((r) => r.date >= ms).length;
+          .gte("date", ms)
+          .lt("date", nextMs);
+        totalThisMonth = count ?? 0;
       }
 
+      // Отметки посещений клиента (и его детей — profile_id указывает на родителя).
       const { data: att } = await supabaseAdmin
         .from("attendance")
         .select("status, lesson:lessons(date)")
-        .eq("profile_id", profileId)
-        .in("status", ["present", "late"]);
+        .eq("profile_id", profileId);
       const attRows = (att ?? []) as unknown as {
         lesson: { date: string } | null;
       }[];
+      // Всего посещений = сколько всего отметок (одна цифра).
       const attendedAllTime = attRows.length;
-      const attendedThisMonth = attRows.filter(
-        (a) => (a.lesson?.date ?? "") >= ms
-      ).length;
+      const totalAllTime = attendedAllTime; // совместимость с интерфейсом
+      // X = сколько отметок приходится на занятия текущего месяца.
+      const attendedThisMonth = attRows.filter((a) => {
+        const d = a.lesson?.date ?? "";
+        return d >= ms && d < nextMs;
+      }).length;
 
       return {
         profile: profile as Profile,

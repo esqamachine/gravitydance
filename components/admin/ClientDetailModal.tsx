@@ -366,7 +366,6 @@ export default function ClientDetailModal({
             <div className="rounded-xl bg-white/5 p-3 text-center">
               <p className="font-heading text-xl font-bold text-ink">
                 {detail.attendedAllTime}
-                <span className="text-muted">/{detail.totalAllTime}</span>
               </p>
               <p className="font-body text-xs text-muted">Всего посещений</p>
             </div>

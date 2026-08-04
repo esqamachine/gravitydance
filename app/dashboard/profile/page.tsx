@@ -5,6 +5,7 @@ import { fullName } from "@/lib/db";
 import ProfileMissing from "@/components/dashboard/ProfileMissing";
 import ChildrenManager from "@/components/dashboard/ChildrenManager";
 import BirthDateEditor from "@/components/dashboard/BirthDateEditor";
+import ProfileFieldEditor from "@/components/dashboard/ProfileFieldEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,6 @@ export default async function ProfilePage() {
     getProfileGroups(profile.id),
     getProfileChildren(profile.id),
   ]);
-
-  const rows = [
-    { icon: User, label: "ФИО", value: fullName(profile) },
-    { icon: Phone, label: "Телефон", value: profile.phone },
-    { icon: Mail, label: "Email", value: profile.email || "—" },
-  ];
 
   return (
     <div className="space-y-6">
@@ -57,18 +52,26 @@ export default async function ProfilePage() {
         </div>
 
         <dl className="mt-6 divide-y divide-white/10">
-          {rows.map((r) => {
-            const Icon = r.icon;
-            return (
-              <div key={r.label} className="flex items-center gap-4 py-4">
-                <Icon size={18} className="shrink-0 text-primary" />
-                <dt className="w-28 shrink-0 font-body text-sm text-muted">
-                  {r.label}
-                </dt>
-                <dd className="font-body text-ink">{r.value}</dd>
-              </div>
-            );
-          })}
+          <ProfileFieldEditor
+            field="name"
+            label="ФИО"
+            icon={User}
+            value={fullName(profile)}
+          />
+          <ProfileFieldEditor
+            field="phone"
+            label="Телефон"
+            icon={Phone}
+            value={profile.phone}
+            inputType="tel"
+          />
+          <ProfileFieldEditor
+            field="email"
+            label="Email"
+            icon={Mail}
+            value={profile.email || ""}
+            inputType="email"
+          />
           <BirthDateEditor value={profile.birth_date} />
         </dl>
       </div>

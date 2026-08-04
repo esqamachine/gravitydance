@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Boxes,
   Users,
@@ -9,14 +10,17 @@ import {
   CheckCircle2,
   XCircle,
   Phone,
+  Plus,
 } from "lucide-react";
-import { getGroupDetailAction } from "@/app/admin/actions";
+import { getGroupDetailAction, createGroup } from "@/app/admin/actions";
 import type { GroupWithCount } from "@/lib/queries";
 import type { GroupDetail, GroupParticipant } from "@/lib/queries";
 
 export default function GroupsGrid({ groups }: { groups: GroupWithCount[] }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const open = async (id: string) => {
     setLoadingId(id);
@@ -27,6 +31,15 @@ export default function GroupsGrid({ groups }: { groups: GroupWithCount[] }) {
 
   return (
     <>
+      <div className="mb-4 flex justify-end">
+        <button
+          onClick={() => setCreating(true)}
+          className="btn-cta inline-flex items-center gap-2 px-5 py-2.5 font-heading text-sm font-bold"
+        >
+          <Plus size={18} /> Новая группа
+        </button>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((g) => (
           <button
@@ -83,7 +96,118 @@ export default function GroupsGrid({ groups }: { groups: GroupWithCount[] }) {
       {detail && (
         <GroupDetailModal detail={detail} onClose={() => setDetail(null)} />
       )}
+
+      {creating && (
+        <NewGroupModal
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            router.refresh();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function NewGroupModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [subs, setSubs] = useState(["", "", ""]);
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const save = () =>
+    startTransition(async () => {
+      setError("");
+      if (!name.trim()) return setError("Укажите название группы");
+      const fd = new FormData();
+      fd.set("name", name.trim());
+      subs.forEach((s, i) => fd.set(`subgroup${i + 1}`, s));
+      const res = await createGroup(fd);
+      if (res.ok === false) return setError(res.error || "Ошибка");
+      onCreated();
+    });
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="animate-pop-in my-4 w-full max-w-md space-y-3 rounded-[1.75rem] border border-white/10 bg-card p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-ink">
+            <Boxes size={18} className="text-primary" /> Новая группа
+          </h3>
+          <button
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="rounded-full p-1.5 text-muted hover:bg-white/5 hover:text-ink"
+          >
+            <X size={22} />
+          </button>
+        </div>
+
+        <label className="block">
+          <span className="mb-1 block font-body text-xs text-muted">
+            Название группы
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Например: Хип-хоп"
+            className="admin-input"
+          />
+        </label>
+
+        {[0, 1, 2].map((i) => (
+          <label key={i} className="block">
+            <span className="mb-1 block font-body text-xs text-muted">
+              Подгруппа {i + 1}
+              {i > 0 ? " (необязательно)" : ""}
+            </span>
+            <input
+              value={subs[i]}
+              onChange={(e) =>
+                setSubs((s) => s.map((v, k) => (k === i ? e.target.value : v)))
+              }
+              className="admin-input"
+            />
+          </label>
+        ))}
+
+        {error && (
+          <p className="text-center font-body text-sm text-pink">{error}</p>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-full border border-white/10 px-6 py-3 font-heading text-sm font-semibold text-muted transition hover:text-ink"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={save}
+            disabled={pending || !name.trim()}
+            className="btn-cta flex flex-1 items-center justify-center gap-2 px-6 py-3 font-heading text-sm font-bold disabled:opacity-50"
+          >
+            {pending ? <Loader2 size={16} className="animate-spin" /> : null}
+            Создать
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

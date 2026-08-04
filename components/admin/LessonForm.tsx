@@ -44,6 +44,17 @@ export default function LessonForm({
       <p className="mb-4 flex items-center gap-2 font-heading font-bold text-ink">
         <Plus size={18} className="text-primary" /> Новое занятие
       </p>
+
+      {/* Название — заглавное поле, над остальными */}
+      <label className="mb-4 block">
+        <Label>Название</Label>
+        <input
+          name="title"
+          placeholder="Например: Открытый урок"
+          className="admin-input font-heading text-base font-semibold"
+        />
+      </label>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <label className="block">
           <Label>Группа</Label>

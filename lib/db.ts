@@ -65,6 +65,7 @@ export interface Lesson {
   id: string;
   group_id: string;
   subgroup_id: string | null;
+  title: string | null;
   date: string;
   start_time: string;
   end_time: string;
@@ -105,6 +106,8 @@ export interface Payment {
   payment_method: string | null;
   external_id: string | null;
   paid_at: string | null;
+  period_start: string | null;
+  period_end: string | null;
   created_at: string;
 }
 
@@ -170,8 +173,26 @@ export const GROUP_COLORS: Record<string, string> = {
   Индивидуальные: "#F97316",
 };
 
+/** Доп. палитра для новых групп (детерминированно по имени). */
+const EXTRA_COLORS = [
+  "#F59E0B",
+  "#8B5CF6",
+  "#3B82F6",
+  "#EC4899",
+  "#06B6D4",
+  "#A78BFA",
+  "#F97316",
+  "#10B981",
+  "#EF4444",
+  "#14B8A6",
+];
+
 export function groupColor(name: string): string {
-  return GROUP_COLORS[name] ?? "#8A9ABF";
+  if (GROUP_COLORS[name]) return GROUP_COLORS[name];
+  // хеш имени → стабильный цвет из палитры
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return EXTRA_COLORS[Math.abs(h) % EXTRA_COLORS.length];
 }
 
 /** 1=Понедельник … 7=Воскресенье */

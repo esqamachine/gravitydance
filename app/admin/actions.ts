@@ -59,11 +59,48 @@ export async function addClient(formData: FormData) {
   revalidatePath("/admin/clients");
 }
 
+/** Создаёт новую группу + до 3 подгрупп. */
+export async function createGroup(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { ok: false, error: "Укажите название группы" };
+
+  const subs = [1, 2, 3]
+    .map((i) => String(formData.get(`subgroup${i}`) ?? "").trim())
+    .filter(Boolean);
+
+  const { data: group, error } = await supabaseAdmin
+    .from("groups")
+    .insert({ name, is_active: true })
+    .select("id")
+    .single();
+  if (error || !group) {
+    console.error("[createGroup]", error?.message);
+    return { ok: false, error: error?.message ?? "Не удалось создать группу" };
+  }
+
+  if (subs.length) {
+    const { error: subErr } = await supabaseAdmin
+      .from("subgroups")
+      .insert(subs.map((n) => ({ group_id: group.id, name: n })));
+    if (subErr) console.error("[createGroup] subgroups:", subErr.message);
+  }
+
+  revalidatePath("/admin/groups");
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/schedule");
+  revalidatePath("/admin/templates");
+  return { ok: true };
+}
+
 export async function addLesson(formData: FormData) {
   await requireAdmin();
 
   const group_id = String(formData.get("group_id") ?? "");
   const subgroup_id = String(formData.get("subgroup_id") ?? "").trim() || null;
+  const title = String(formData.get("title") ?? "").trim() || null;
   const date = String(formData.get("date") ?? "");
   const start_time = String(formData.get("start_time") ?? "");
   const end_time = String(formData.get("end_time") ?? "");
@@ -71,10 +108,27 @@ export async function addLesson(formData: FormData) {
 
   if (!group_id || !date || !start_time || !end_time) return;
 
-  await supabaseAdmin
-    .from("lessons")
-    .insert({ group_id, subgroup_id, date, start_time, end_time, coach_name });
+  const row = { group_id, subgroup_id, title, date, start_time, end_time, coach_name };
+  const { error } = await supabaseAdmin.from("lessons").insert(row);
+  // Фолбэк, если колонка title ещё не добавлена (миграция 018 не запущена).
+  if (error && /title/i.test(error.message)) {
+    const { title: _t, ...rest } = row;
+    void _t;
+    await supabaseAdmin.from("lessons").insert(rest);
+  } else if (error) {
+    console.error("[addLesson]", error.message);
+  }
 
+  revalidatePath("/admin/schedule");
+  revalidatePath("/admin/attendance");
+}
+
+/** Полностью удаляет занятие (для ошибочных/лишних записей). */
+export async function deleteLesson(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("lesson_id") ?? "");
+  if (!id) return;
+  await supabaseAdmin.from("lessons").delete().eq("id", id);
   revalidatePath("/admin/schedule");
   revalidatePath("/admin/attendance");
 }
@@ -148,6 +202,108 @@ export async function addManualPayment(formData: FormData) {
 
   revalidatePath("/admin/clients");
   revalidatePath("/admin/payments");
+}
+
+/** «04 августа 2026 г.» из ISO-даты. */
+function fmtDateRu(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(y, m - 1, d));
+}
+
+/** Редактирование платежа: сумма, описание, дата, статус. */
+export async function updatePayment(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, error: "Нет id" };
+  const amount = Number(formData.get("amount") ?? 0);
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const date = String(formData.get("date") ?? "").trim();
+  const status = String(formData.get("status") ?? "paid") as
+    | "paid"
+    | "pending"
+    | "failed"
+    | "refunded";
+
+  const patch: Record<string, unknown> = {
+    amount: amount > 0 ? amount : 0,
+    description,
+    status,
+  };
+  if (date) patch.created_at = date;
+  if (status === "paid") patch.paid_at = new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("payments")
+    .update(patch)
+    .eq("id", id);
+  if (error) {
+    console.error("[updatePayment]", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/clients");
+  return { ok: true };
+}
+
+/** Продлевает абонемент: дата = сегодня, период = месяц, статус = оплачено. */
+export async function extendSubscription(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, error: "Нет id" };
+
+  const now = new Date();
+  const startISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(now.getDate()).padStart(2, "0")}`;
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const endISO = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(end.getDate()).padStart(2, "0")}`;
+  const description = `${fmtDateRu(startISO)} — ${fmtDateRu(endISO)}`;
+
+  const full: Record<string, unknown> = {
+    description,
+    status: "paid",
+    paid_at: now.toISOString(),
+    created_at: now.toISOString(),
+    period_start: startISO,
+    period_end: endISO,
+  };
+
+  const { error } = await supabaseAdmin
+    .from("payments")
+    .update(full)
+    .eq("id", id);
+  // Фолбэк, если колонок периода ещё нет (миграция 019 не запущена).
+  if (error && /period_/i.test(error.message)) {
+    await supabaseAdmin
+      .from("payments")
+      .update({
+        description,
+        status: "paid",
+        paid_at: now.toISOString(),
+        created_at: now.toISOString(),
+      })
+      .eq("id", id);
+  } else if (error) {
+    console.error("[extendSubscription]", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/clients");
+  return { ok: true };
 }
 
 export async function excludeClient(formData: FormData) {
@@ -226,12 +382,14 @@ export async function saveNews(formData: FormData) {
   const image_url = String(formData.get("image_url") ?? "").trim() || null;
   const published =
     formData.get("published") === "on" || formData.get("published") === "true";
-  if (!title || !content) return;
+  if (!title || !content)
+    return { ok: false, error: "Заполните заголовок и текст" };
   if (!slug) slug = slugify(title);
 
   const now = new Date().toISOString();
   const base = { title, slug, excerpt, content, image_url, published, updated_at: now };
 
+  let dbError: string | null = null;
   if (id) {
     const { data: prev } = await supabaseAdmin
       .from("news")
@@ -241,15 +399,26 @@ export async function saveNews(formData: FormData) {
     const published_at = published
       ? (prev as { published_at: string | null } | null)?.published_at ?? now
       : null;
-    await supabaseAdmin.from("news").update({ ...base, published_at }).eq("id", id);
+    const { error } = await supabaseAdmin
+      .from("news")
+      .update({ ...base, published_at })
+      .eq("id", id);
+    dbError = error?.message ?? null;
   } else {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("news")
       .insert({ ...base, published_at: published ? now : null });
+    dbError = error?.message ?? null;
+  }
+
+  if (dbError) {
+    console.error("[saveNews] db:", dbError);
+    return { ok: false, error: dbError };
   }
 
   revalidatePath("/admin/news");
   revalidatePath("/news");
+  return { ok: true };
 }
 
 export async function deleteNews(formData: FormData) {
@@ -277,7 +446,9 @@ export async function saveCamp(formData: FormData) {
   const image_url = String(formData.get("image_url") ?? "").trim() || null;
   const published =
     formData.get("published") === "on" || formData.get("published") === "true";
-  if (!title || !description) return;
+  // Цена и даты — необязательны (для «старых сборов» без цены/даты).
+  if (!title || !description)
+    return { ok: false, error: "Заполните название и описание" };
   if (!slug) slug = slugify(title);
 
   const now = new Date().toISOString();
@@ -294,6 +465,7 @@ export async function saveCamp(formData: FormData) {
     updated_at: now,
   };
 
+  let dbError: string | null = null;
   if (id) {
     const { data: prev } = await supabaseAdmin
       .from("camps")
@@ -303,15 +475,26 @@ export async function saveCamp(formData: FormData) {
     const published_at = published
       ? (prev as { published_at: string | null } | null)?.published_at ?? now
       : null;
-    await supabaseAdmin.from("camps").update({ ...base, published_at }).eq("id", id);
+    const { error } = await supabaseAdmin
+      .from("camps")
+      .update({ ...base, published_at })
+      .eq("id", id);
+    dbError = error?.message ?? null;
   } else {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("camps")
       .insert({ ...base, published_at: published ? now : null });
+    dbError = error?.message ?? null;
+  }
+
+  if (dbError) {
+    console.error("[saveCamp] db:", dbError);
+    return { ok: false, error: dbError };
   }
 
   revalidatePath("/admin/camps");
   revalidatePath("/camps");
+  return { ok: true };
 }
 
 export async function deleteCamp(formData: FormData) {
@@ -329,12 +512,100 @@ export async function addGalleryImage(formData: FormData) {
   await requireAdmin();
   const image_url = String(formData.get("image_url") ?? "").trim();
   const caption = String(formData.get("caption") ?? "").trim() || null;
-  if (!image_url) return;
+  if (!image_url) return { ok: false, error: "Нет URL изображения" };
 
-  await supabaseAdmin.from("gallery").insert({ image_url, caption });
+  const { error } = await supabaseAdmin
+    .from("gallery")
+    .insert({ image_url, caption });
+  if (error) {
+    console.error("[addGalleryImage] db:", error);
+    return { ok: false, error: error.message };
+  }
 
   revalidatePath("/admin/gallery");
   revalidatePath("/");
+  return { ok: true };
+}
+
+/** Импортирует статические фото сайта (public/images/gallery) в таблицу gallery,
+ *  чтобы ими можно было управлять (удалять/заменять). Пропускает уже добавленные. */
+export async function importSiteGallery(): Promise<{ imported: number }> {
+  await requireAdmin();
+  const fs = await import("fs");
+  const path = await import("path");
+  const dir = path.join(process.cwd(), "public", "images", "gallery");
+
+  let files: string[] = [];
+  try {
+    files = fs
+      .readdirSync(dir)
+      .filter((f) => /\.(jpe?g|png|webp)$/i.test(f))
+      .sort();
+  } catch {
+    return { imported: 0 };
+  }
+  const urls = files.map((f) => `/images/gallery/${f}`);
+
+  const { data: existingRows } = await supabaseAdmin
+    .from("gallery")
+    .select("image_url");
+  const have = new Set(
+    (existingRows ?? []).map((r: { image_url: string }) => r.image_url)
+  );
+
+  const toInsert = urls
+    .filter((u) => !have.has(u))
+    .map((u, i) => ({ image_url: u, sort_order: i }));
+
+  let imported = 0;
+  if (toInsert.length) {
+    const { data, error } = await supabaseAdmin
+      .from("gallery")
+      .insert(toInsert)
+      .select("id");
+    if (!error) imported = data?.length ?? 0;
+    else console.error("[importSiteGallery]", error.message);
+  }
+
+  revalidatePath("/admin/gallery");
+  revalidatePath("/");
+  return { imported };
+}
+
+/** Заменяет изображение существующей записи галереи (по клику «Заменить»). */
+export async function replaceGalleryImage(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const image_url = String(formData.get("image_url") ?? "").trim();
+  const old_url = String(formData.get("old_url") ?? "");
+  if (!id || !image_url) return { ok: false, error: "Нет данных" };
+
+  const { error } = await supabaseAdmin
+    .from("gallery")
+    .update({ image_url })
+    .eq("id", id);
+  if (error) {
+    console.error("[replaceGalleryImage]", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  // Удаляем старый файл из бакета, если это был загруженный файл.
+  const marker = "/gallery/";
+  const idx = old_url.indexOf(marker);
+  if (idx !== -1 && old_url.includes("/storage/")) {
+    const p = old_url.slice(idx + marker.length);
+    if (p) {
+      try {
+        await supabaseAdmin.storage.from("gallery").remove([p]);
+      } catch {
+        /* игнорируем */
+      }
+    }
+  }
+
+  revalidatePath("/admin/gallery");
+  revalidatePath("/");
+  return { ok: true };
 }
 
 export async function deleteGalleryImage(formData: FormData) {
@@ -483,14 +754,19 @@ export async function deleteTemplateSet(formData: FormData) {
  *  на 31 день вперёд от сегодня. Пропускает дубликаты и даты вне окна. */
 export async function applyTemplateMonth(
   name: string
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; total: number; error?: string }> {
   await requireAdmin();
-  if (!name) return { created: 0, skipped: 0 };
+  console.log("[applyTemplateMonth] name:", name);
+  if (!name) return { created: 0, skipped: 0, total: 0 };
 
-  const { data: tpls } = await supabaseAdmin
+  const { data: tpls, error: selErr } = await supabaseAdmin
     .from("schedule_templates")
     .select("*")
     .eq("name", name);
+  if (selErr) {
+    console.error("[applyTemplateMonth] select:", selErr);
+    return { created: 0, skipped: 0, total: 0, error: selErr.message };
+  }
   const rows = (tpls ?? []) as {
     group_id: string;
     subgroup_id: string | null;
@@ -500,7 +776,9 @@ export async function applyTemplateMonth(
     coach: string;
     hall: string | null;
   }[];
-  if (rows.length === 0) return { created: 0, skipped: 0 };
+  console.log("[applyTemplateMonth] template rows:", rows.length);
+  if (rows.length === 0)
+    return { created: 0, skipped: 0, total: 0, error: "В шаблоне нет занятий" };
 
   const now = new Date();
   const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
@@ -545,18 +823,40 @@ export async function applyTemplateMonth(
     });
   }
 
+  console.log(
+    "[applyTemplateMonth] window:",
+    todayISO,
+    "→",
+    endISO,
+    "| dated:",
+    dated.length,
+    "| toInsert:",
+    toInsert.length
+  );
+
   let created = 0;
+  let insertError: string | undefined;
   if (toInsert.length) {
     const { data, error } = await supabaseAdmin
       .from("lessons")
       .insert(toInsert)
       .select("id");
-    if (!error) created = data?.length ?? 0;
+    if (error) {
+      console.error("[applyTemplateMonth] insert:", error);
+      insertError = error.message;
+    } else {
+      created = data?.length ?? 0;
+    }
   }
 
   revalidatePath("/admin/schedule");
   revalidatePath("/admin/attendance");
-  return { created, skipped: dated.length - created };
+  return {
+    created,
+    skipped: dated.length - created,
+    total: dated.length,
+    error: insertError,
+  };
 }
 
 /* ---------- Генерация недели по шаблонам ---------- */

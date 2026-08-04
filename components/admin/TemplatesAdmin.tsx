@@ -93,6 +93,10 @@ export default function TemplatesAdmin({
   const [viewM, setViewM] = useState(now.getMonth());
   const [pending, startTransition] = useTransition();
   const [applyingName, setApplyingName] = useState<string | null>(null);
+  const [applyResult, setApplyResult] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
   const [error, setError] = useState("");
 
   const openNew = () => {
@@ -191,11 +195,29 @@ export default function TemplatesAdmin({
   const apply = (n: string) =>
     startTransition(async () => {
       setApplyingName(n);
+      setApplyResult(null);
       const res = await applyTemplateMonth(n);
       setApplyingName(null);
-      alert(
-        `Готово: создано занятий — ${res.created}, пропущено — ${res.skipped}. Даты вне ближайших 31 дня не применяются.`
-      );
+      if (res.error) {
+        setApplyResult({ ok: false, text: `Ошибка: ${res.error}` });
+      } else if (res.total === 0) {
+        setApplyResult({
+          ok: false,
+          text: "Нет дат в ближайших 31 дне — добавьте занятия на будущие даты.",
+        });
+      } else if (res.created === 0) {
+        setApplyResult({
+          ok: true,
+          text: `Все ${res.total} занятий уже созданы в расписании — новых нет.`,
+        });
+      } else {
+        setApplyResult({
+          ok: true,
+          text: `Создано ${res.created} занятий в расписании${
+            res.skipped ? ` (${res.skipped} уже были)` : ""
+          }. Смотрите раздел «Расписание».`,
+        });
+      }
       router.refresh();
     });
 
@@ -230,6 +252,25 @@ export default function TemplatesAdmin({
 
   return (
     <div className="space-y-4">
+      {applyResult && (
+        <div
+          className={`flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 font-body text-sm ${
+            applyResult.ok
+              ? "border-green-500/30 bg-green-500/10 text-green-300"
+              : "border-pink/30 bg-pink/10 text-pink"
+          }`}
+        >
+          <span>{applyResult.text}</span>
+          <button
+            onClick={() => setApplyResult(null)}
+            aria-label="Закрыть"
+            className="shrink-0 opacity-70 hover:opacity-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="flex justify-end">
         <button
           onClick={openNew}
