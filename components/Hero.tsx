@@ -14,8 +14,8 @@ export default function Hero() {
         <div className="absolute bottom-[-8rem] left-1/3 h-[24rem] w-[24rem] animate-orb-3 rounded-full bg-pink/20 blur-[110px]" />
       </div>
 
-      {/* Сетка-паттерн + виньетка */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(7,11,26,0.9))]" />
+      {/* Тёмная виньетка — только для тёмной темы (на светлой затемняла фон) */}
+      <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(7,11,26,0.9))] dark:block" />
 
       <div className="relative z-10 mx-auto max-w-4xl px-6 text-center">
         {/* Крупный логотип-танцовщица */}
@@ -36,13 +36,13 @@ export default function Hero() {
           ✦ Современный танец · Акробатика
         </span>
 
-        <h1 className="mt-6 font-heading text-[clamp(2.25rem,7vw,4.25rem)] font-extrabold leading-[1.08] tracking-tight text-ink">
+        <h1 className="mt-6 font-heading text-[clamp(2.25rem,7vw,4.25rem)] font-extrabold leading-[1.08] tracking-tight text-gray-900 dark:text-ink">
           Студия танца
           <br />
           <span className="text-gradient">«Гравитация»</span>
         </h1>
 
-        <p className="mx-auto mt-5 max-w-xl font-body text-[clamp(1rem,4vw,1.5rem)] font-light text-muted">
+        <p className="mx-auto mt-5 max-w-xl font-body text-[clamp(1rem,4vw,1.5rem)] font-light text-gray-600 dark:text-muted">
           Стань центром притяжения
         </p>
 

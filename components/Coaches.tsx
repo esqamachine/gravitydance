@@ -46,14 +46,14 @@ export default function Coaches() {
 
           {/* Правая колонка — роль + описание + цитата + группы. Занимает
               примерно половину высоты фото (justify-center по центру). */}
-          <div className="flex min-h-[50%] flex-col justify-center rounded-[1.75rem] border border-white/10 bg-card p-6 sm:p-7 lg:self-center">
-            <p className="font-heading text-xl font-bold text-ink sm:text-2xl">
+          <div className="flex min-h-[50%] flex-col justify-center rounded-[1.75rem] border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#12122A] dark:shadow-none sm:p-7 lg:self-center">
+            <p className="font-heading text-xl font-bold sm:text-2xl">
               <span className="text-gradient">{coach.role}</span>
             </p>
-            <p className="mt-3 font-body text-sm leading-relaxed text-ink/80 sm:text-base">
+            <p className="mt-3 font-body text-sm leading-relaxed text-gray-700 dark:text-gray-300 sm:text-base">
               {coach.bio}
             </p>
-            <p className="mt-3 font-body text-sm italic leading-snug text-muted">
+            <p className="mt-3 font-body text-sm italic leading-snug text-gray-500 dark:text-gray-400">
               «{coach.quote}»
             </p>
             <div className="mt-5 flex flex-wrap gap-1.5">

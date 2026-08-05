@@ -60,9 +60,10 @@ export default function Groups() {
             className="grid animate-fade-in-up overflow-hidden rounded-[2rem] border border-white/10 bg-card md:grid-cols-2"
           >
             {/* Визуал — фото группы (эмодзи/градиент как fallback).
-                Единый aspect-ratio для всех групп + object-contain → фото
-                показывается целиком, без обрезки, в одинаковом формате. */}
-            <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface md:aspect-auto md:min-h-[24rem]">
+                object-cover заполняет всю область карточки, одинаково для всех
+                групп: мобилка — горизонтальный прямоугольник сверху, десктоп —
+                левая половина карточки. Без полей и рамок вокруг. */}
+            <div className="relative flex min-h-[15rem] items-center justify-center overflow-hidden bg-surface md:min-h-[24rem]">
               <div className="absolute -left-10 top-0 h-56 w-56 animate-orb-1 rounded-full bg-primary/25 blur-[80px]" />
               <div className="absolute bottom-0 right-0 h-56 w-56 animate-orb-3 rounded-full bg-pink/20 blur-[80px]" />
               <span className="relative z-[1] text-7xl opacity-70 drop-shadow-[0_0_30px_rgba(167,139,250,0.4)]">
@@ -75,8 +76,7 @@ export default function Groups() {
                 src={group.img}
                 alt={group.title}
                 sizes="(max-width: 768px) 100vw, 50vw"
-                fit="contain"
-                className="z-[2] p-3"
+                className="z-[2]"
               />
             </div>
 
