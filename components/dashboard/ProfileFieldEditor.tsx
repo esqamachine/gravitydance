@@ -2,23 +2,37 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Check, X, Loader2, type LucideIcon } from "lucide-react";
+import {
+  Pencil,
+  Check,
+  X,
+  Loader2,
+  User,
+  Phone,
+  Mail,
+  type LucideIcon,
+} from "lucide-react";
 import { updateProfileField } from "@/app/dashboard/actions";
+
+const FIELD_ICONS: Record<"name" | "phone" | "email", LucideIcon> = {
+  name: User,
+  phone: Phone,
+  email: Mail,
+};
 
 /** Инлайн-редактор одного поля профиля (ФИО / телефон / email). */
 export default function ProfileFieldEditor({
   field,
   label,
-  icon: Icon,
   value,
   inputType = "text",
 }: {
   field: "name" | "phone" | "email";
   label: string;
-  icon: LucideIcon;
   value: string;
   inputType?: string;
 }) {
+  const Icon = FIELD_ICONS[field];
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value);

@@ -43,9 +43,14 @@ export default function GalleryAdmin({
     fd.set("file", file);
     fd.set("bucket", "gallery");
     const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-    const data = await res.json();
+    // Ответ может быть не-JSON (например, HTML-страница nginx 413) — читаем безопасно.
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      setError(data.error || "Ошибка загрузки");
+      setError(
+        res.status === 413
+          ? "Файл слишком большой (ограничение сервера)"
+          : data?.error || `Ошибка загрузки (${res.status})`
+      );
       return null;
     }
     return data.url as string;

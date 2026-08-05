@@ -31,9 +31,18 @@ export default function ImageUpload({
       fd.set("file", file);
       fd.set("bucket", bucket);
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) setError(data.error || "Ошибка загрузки");
-      else setUrl(data.url);
+      // Ответ может быть не-JSON (например, HTML-страница nginx 413 при
+      // превышении client_max_body_size) — читаем безопасно.
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 413) {
+          setError("Файл слишком большой (ограничение сервера)");
+        } else {
+          setError(data?.error || `Ошибка загрузки (${res.status})`);
+        }
+      } else {
+        setUrl(data.url);
+      }
     } catch {
       setError("Ошибка сети");
     } finally {

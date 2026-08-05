@@ -797,20 +797,24 @@ export async function applyTemplateMonth(
     dates.length > 0
       ? await supabaseAdmin
           .from("lessons")
-          .select("group_id,date,start_time")
+          .select("group_id,subgroup_id,date,start_time")
           .in("date", dates)
       : { data: [] };
   const seen = new Set(
     (existing ?? []).map(
-      (e: { group_id: string; date: string; start_time: string }) =>
-        `${e.group_id}|${e.date}|${e.start_time}`
+      (e: {
+        group_id: string;
+        subgroup_id: string | null;
+        date: string;
+        start_time: string;
+      }) => `${e.group_id}|${e.subgroup_id ?? ""}|${e.date}|${e.start_time}`
     )
   );
 
   const toInsert: Record<string, unknown>[] = [];
   for (const t of dated) {
     const date = t.lesson_date as string;
-    const key = `${t.group_id}|${date}|${t.start_time}`;
+    const key = `${t.group_id}|${t.subgroup_id ?? ""}|${date}|${t.start_time}`;
     if (seen.has(key)) continue;
     seen.add(key);
     toInsert.push({

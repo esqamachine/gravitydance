@@ -1,4 +1,4 @@
-import { Phone, Mail, User, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { getSession } from "@/lib/account";
 import { getProfileGroups, getProfileChildren } from "@/lib/queries";
 import { fullName } from "@/lib/db";
@@ -55,20 +55,17 @@ export default async function ProfilePage() {
           <ProfileFieldEditor
             field="name"
             label="ФИО"
-            icon={User}
             value={fullName(profile)}
           />
           <ProfileFieldEditor
             field="phone"
             label="Телефон"
-            icon={Phone}
             value={profile.phone}
             inputType="tel"
           />
           <ProfileFieldEditor
             field="email"
             label="Email"
-            icon={Mail}
             value={profile.email || ""}
             inputType="email"
           />
