@@ -71,13 +71,24 @@ export const metadata: Metadata = {
   },
 };
 
+// До-гидрационный скрипт: применяет сохранённую тему из localStorage ещё до
+// первой отрисовки, чтобы не мигало. По умолчанию тёмная (класс dark уже стоит).
+const themeInit = `(function(){try{var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.remove('dark');}else{document.documentElement.classList.add('dark');}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className={`${montserrat.variable} ${manrope.variable}`}>
+    <html
+      lang="ru"
+      className={`dark ${montserrat.variable} ${manrope.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body>
         {/* Фирменная водяная марка под всем контентом */}
         <div className="brand-watermark" aria-hidden />

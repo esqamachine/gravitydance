@@ -12,12 +12,15 @@ export default function Photo({
   alt,
   sizes,
   priority = false,
+  fit = "cover",
   className = "",
 }: {
   src: string;
   alt: string;
   sizes?: string;
   priority?: boolean;
+  /** object-fit: cover (по умолчанию, кадрирует) или contain (без обрезки) */
+  fit?: "cover" | "contain";
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
@@ -32,7 +35,9 @@ export default function Photo({
       alt={alt}
       loading={priority ? "eager" : "lazy"}
       onError={() => setFailed(true)}
-      className={`absolute inset-0 h-full w-full object-cover ${className}`}
+      className={`absolute inset-0 h-full w-full ${
+        fit === "contain" ? "object-contain" : "object-cover"
+      } ${className}`}
     />
   );
 }

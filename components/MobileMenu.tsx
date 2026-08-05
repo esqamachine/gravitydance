@@ -5,6 +5,7 @@ import { X, Phone, User } from "lucide-react";
 import { navLinks, contacts } from "@/lib/data";
 import { useDashboardHref } from "@/lib/useDashboardHref";
 import LogoMark from "./Logo";
+import ThemeToggle from "./ThemeToggle";
 
 export default function MobileMenu({
   open,
@@ -64,6 +65,10 @@ export default function MobileMenu({
         </nav>
 
         <div className="space-y-3 border-t border-white/10 p-5">
+          <div className="flex items-center justify-between rounded-full border border-white/10 bg-white/5 px-4 py-2">
+            <span className="font-body text-sm font-medium text-ink">Тема</span>
+            <ThemeToggle />
+          </div>
           <a
             href={contacts.phoneHref}
             className="flex items-center justify-center gap-2 font-body text-base font-semibold text-ink"

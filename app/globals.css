@@ -2,17 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- Темы ----------
+   Токены заданы как rgb-триплеты (для tailwind alpha-модификаторов) и как hex
+   (для сырых CSS-правил ниже). Светлая тема — значения по умолчанию в :root,
+   тёмная — переопределяется классом .dark на <html>. По умолчанию сайт тёмный
+   (класс .dark ставится в layout + до-гидрационным скриптом из localStorage). */
 :root {
-  --base: #070b1a;
-  --card: #0d1428;
-  --surface: #131b33;
+  /* Светлая тема */
+  --base-rgb: 255 255 255;
+  --card-rgb: 245 247 251;
+  --surface-rgb: 238 242 249;
+  --ink-rgb: 15 23 42;
+  --muted-rgb: 100 116 139;
+
+  --base: #ffffff;
+  --card: #f5f7fb;
+  --surface: #eef2f9;
+  --ink: #0f172a;
+  --muted: #64748b;
+
   --primary: #4aaddf;
   --primary-light: #7cc8f0;
   --violet: #a78bfa;
   --pink: #f472b6;
+  --light-section: #f4f8ff;
+}
+
+.dark {
+  /* Тёмная тема (исходный дизайн) */
+  --base-rgb: 7 11 26;
+  --card-rgb: 13 20 40;
+  --surface-rgb: 19 27 51;
+  --ink-rgb: 228 234 246;
+  --muted-rgb: 138 154 191;
+
+  --base: #070b1a;
+  --card: #0d1428;
+  --surface: #131b33;
   --ink: #e4eaf6;
   --muted: #8a9abf;
-  --light-section: #f4f8ff;
 }
 
 html {
@@ -38,6 +66,7 @@ body {
   font-family: var(--font-body), sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 h1,
@@ -73,6 +102,48 @@ textarea {
   background-repeat: repeat;
   background-size: 250px;
   transform: rotate(-15deg) scale(1.2);
+}
+/* На светлой теме водяная марка ещё более прозрачная */
+:root:not(.dark) .brand-watermark {
+  opacity: 0.015;
+}
+
+/* ---------- Светлая тема: адаптация «тёмных» утилит ----------
+   Компоненты повсеместно используют полупрозрачные БЕЛЫЕ оверлеи
+   (border-white/10, bg-white/5 и т.п.) — на светлом фоне они невидимы.
+   Здесь глобально перекрашиваем самые частые из них в полупрозрачный тёмный,
+   чтобы разделители, рамки и «приподнятые» поверхности читались. Правила
+   специфичнее одиночных tailwind-классов, поэтому выигрывают без !important. */
+:root:not(.dark) .border-white\/5,
+:root:not(.dark) .border-white\/10,
+:root:not(.dark) .border-white\/15,
+:root:not(.dark) .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.1);
+}
+:root:not(.dark) .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(15, 23, 42, 0.1);
+}
+:root:not(.dark) .bg-white\/5 {
+  background-color: rgba(15, 23, 42, 0.04);
+}
+:root:not(.dark) .bg-white\/10 {
+  background-color: rgba(15, 23, 42, 0.06);
+}
+:root:not(.dark) .hover\:bg-white\/5:hover {
+  background-color: rgba(15, 23, 42, 0.05);
+}
+:root:not(.dark) .hover\:bg-white\/10:hover {
+  background-color: rgba(15, 23, 42, 0.07);
+}
+/* Карточки на светлой теме — лёгкая тень для отделения от фона */
+:root:not(.dark) .bg-card {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+/* Полупрозрачный тёмный оверлей модалок на светлой теме мягче */
+:root:not(.dark) .bg-black\/60,
+:root:not(.dark) .bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.45);
 }
 
 /* ---------- Утилиты бренда ---------- */
@@ -191,6 +262,11 @@ textarea {
 }
 .admin-input:focus {
   border-color: var(--primary);
+}
+/* Светлая тема: рамка видимой, нативные пикеры — светлые */
+:root:not(.dark) .admin-input {
+  border-color: rgba(15, 23, 42, 0.12);
+  color-scheme: light;
 }
 
 /* Пульсация сегодняшнего занятия в календаре */

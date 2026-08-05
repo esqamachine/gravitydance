@@ -67,13 +67,15 @@ export async function createGroup(
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { ok: false, error: "Укажите название группы" };
 
+  const color = String(formData.get("color") ?? "").trim() || null;
+
   const subs = [1, 2, 3]
     .map((i) => String(formData.get(`subgroup${i}`) ?? "").trim())
     .filter(Boolean);
 
   const { data: group, error } = await supabaseAdmin
     .from("groups")
-    .insert({ name, is_active: true })
+    .insert({ name, color, is_active: true, max_students: 50 })
     .select("id")
     .single();
   if (error || !group) {
@@ -88,10 +90,106 @@ export async function createGroup(
     if (subErr) console.error("[createGroup] subgroups:", subErr.message);
   }
 
+  revalidateGroups();
+  return { ok: true };
+}
+
+/** Пути, зависящие от списка групп/подгрупп — обновляем разом. */
+function revalidateGroups() {
   revalidatePath("/admin/groups");
   revalidatePath("/admin/clients");
   revalidatePath("/admin/schedule");
   revalidatePath("/admin/templates");
+  revalidatePath("/admin/attendance");
+}
+
+/** Редактирует группу: название, цвет и набор подгрупп (добавить/переименовать/удалить). */
+export async function updateGroup(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim() || null;
+  if (!id) return { ok: false, error: "Нет группы" };
+  if (!name) return { ok: false, error: "Укажите название группы" };
+
+  // Желаемый список подгрупп: [{ id?: string, name: string }]
+  let desired: { id?: string; name: string }[] = [];
+  try {
+    const raw = JSON.parse(String(formData.get("subgroups") ?? "[]"));
+    if (Array.isArray(raw)) {
+      desired = raw
+        .map((s) => ({
+          id: typeof s.id === "string" && s.id ? s.id : undefined,
+          name: String(s.name ?? "").trim(),
+        }))
+        .filter((s) => s.name);
+    }
+  } catch {
+    return { ok: false, error: "Некорректные подгруппы" };
+  }
+
+  const { error: gErr } = await supabaseAdmin
+    .from("groups")
+    .update({ name, color })
+    .eq("id", id);
+  if (gErr) {
+    console.error("[updateGroup]", gErr.message);
+    return { ok: false, error: gErr.message };
+  }
+
+  // Существующие подгруппы
+  const { data: existing } = await supabaseAdmin
+    .from("subgroups")
+    .select("id")
+    .eq("group_id", id);
+  const existingIds = new Set((existing ?? []).map((s: { id: string }) => s.id));
+  const keepIds = new Set(desired.map((s) => s.id).filter(Boolean) as string[]);
+
+  // Удалить те, что убрали в форме (ссылки в client_groups/lessons → SET NULL)
+  const toDelete = Array.from(existingIds).filter((sid) => !keepIds.has(sid));
+  if (toDelete.length) {
+    await supabaseAdmin.from("subgroups").delete().in("id", toDelete);
+  }
+
+  // Переименовать существующие
+  for (const s of desired) {
+    if (s.id && existingIds.has(s.id)) {
+      await supabaseAdmin.from("subgroups").update({ name: s.name }).eq("id", s.id);
+    }
+  }
+
+  // Добавить новые
+  const toInsert = desired
+    .filter((s) => !s.id)
+    .map((s) => ({ group_id: id, name: s.name }));
+  if (toInsert.length) {
+    const { error: insErr } = await supabaseAdmin
+      .from("subgroups")
+      .insert(toInsert);
+    if (insErr) console.error("[updateGroup] subgroups insert:", insErr.message);
+  }
+
+  revalidateGroups();
+  return { ok: true };
+}
+
+/** Удаляет группу целиком. client_groups, subgroups, lessons удаляются каскадом (FK). */
+export async function deleteGroup(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { ok: false, error: "Нет группы" };
+
+  const { error } = await supabaseAdmin.from("groups").delete().eq("id", id);
+  if (error) {
+    console.error("[deleteGroup]", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  revalidateGroups();
   return { ok: true };
 }
 

@@ -32,6 +32,7 @@ export interface Group {
   duration: string | null;
   max_students: number;
   is_active: boolean;
+  color: string | null;
 }
 
 export interface Subgroup {
@@ -187,7 +188,9 @@ const EXTRA_COLORS = [
   "#14B8A6",
 ];
 
-export function groupColor(name: string): string {
+export function groupColor(name: string, stored?: string | null): string {
+  // Явно заданный цвет группы (из БД) имеет приоритет.
+  if (stored) return stored;
   if (GROUP_COLORS[name]) return GROUP_COLORS[name];
   // хеш имени → стабильный цвет из палитры
   let h = 0;

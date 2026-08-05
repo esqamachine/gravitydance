@@ -7,6 +7,7 @@ import { contacts, primaryNavLinks, secondaryNavLinks } from "@/lib/data";
 import { useDashboardHref } from "@/lib/useDashboardHref";
 import LogoMark from "./Logo";
 import MobileMenu from "./MobileMenu";
+import ThemeToggle from "./ThemeToggle";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -89,6 +90,7 @@ export default function Header() {
 
               {/* Бургер «Ещё» + кнопка «Записаться» (бургер левее кнопки) */}
               <div className="flex items-center gap-2.5">
+                <ThemeToggle className="h-10 w-10" />
                 <div className="relative" ref={moreRef}>
                   <button
                     onClick={() => setMoreOpen((v) => !v)}
@@ -140,14 +142,17 @@ export default function Header() {
               </div>
             </div>
 
-            {/* Бургер (мобайл / планшет) — всё меню */}
-            <button
-              onClick={() => setMenuOpen(true)}
-              aria-label="Открыть меню"
-              className="-mr-1.5 flex h-11 w-11 items-center justify-center rounded-lg text-ink transition hover:bg-white/5 xl:hidden"
-            >
-              <Menu size={26} />
-            </button>
+            {/* Тумблер темы + бургер (мобайл / планшет) */}
+            <div className="flex items-center gap-1 xl:hidden">
+              <ThemeToggle />
+              <button
+                onClick={() => setMenuOpen(true)}
+                aria-label="Открыть меню"
+                className="-mr-1.5 flex h-11 w-11 items-center justify-center rounded-lg text-ink transition hover:bg-white/5"
+              >
+                <Menu size={26} />
+              </button>
+            </div>
           </div>
         </div>
       </header>

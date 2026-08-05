@@ -11,6 +11,7 @@ import {
   Shield,
 } from "lucide-react";
 import LogoMark from "@/components/Logo";
+import ThemeToggle from "@/components/ThemeToggle";
 import { signOut } from "@/app/auth/actions";
 
 const items = [
@@ -44,14 +45,25 @@ export default function DashboardShell({
               Гравитация
             </span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <span className="hidden font-body text-sm text-muted sm:inline">
               {name}
             </span>
+            <ThemeToggle className="h-11 w-11" />
+            {isAdmin && (
+              <Link
+                href="/admin"
+                aria-label="Админ-панель"
+                title="Админ-панель"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-white shadow-cta transition hover:brightness-105"
+              >
+                <Shield size={20} />
+              </Link>
+            )}
             <form action={signOut}>
               <button
                 type="submit"
-                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 font-body text-sm text-ink transition hover:border-primary/40 hover:bg-primary/10"
+                className="flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 font-body text-sm text-ink transition hover:border-primary/40 hover:bg-primary/10"
               >
                 <LogOut size={16} />
                 <span className="hidden sm:inline">Выйти</span>

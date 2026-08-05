@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -13,18 +14,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Тёмная тема
-        base: "#070B1A", // основной фон
-        card: "#0D1428", // карточки
-        surface: "#131B33", // поверхности
-        // Брендовый градиент: голубой → сиреневый → розовый
+        // Семантические токены темы — значения задаются CSS-переменными в
+        // globals.css (флипаются между светлой и тёмной темой через класс .dark).
+        // rgb-триплеты нужны, чтобы работали модификаторы прозрачности (bg-base/80).
+        base: "rgb(var(--base-rgb) / <alpha-value>)", // основной фон
+        card: "rgb(var(--card-rgb) / <alpha-value>)", // карточки
+        surface: "rgb(var(--surface-rgb) / <alpha-value>)", // поверхности
+        ink: "rgb(var(--ink-rgb) / <alpha-value>)", // основной текст
+        muted: "rgb(var(--muted-rgb) / <alpha-value>)", // приглушённый текст
+        // Брендовый градиент: голубой → сиреневый → розовый (одинаков в обеих темах)
         primary: "#4AADDF",
         "primary-light": "#7CC8F0",
         violet: "#A78BFA",
         pink: "#F472B6",
-        // Текст
-        ink: "#E4EAF6",
-        muted: "#8A9ABF",
         // Светлая секция (галерея)
         "light-section": "#F4F8FF",
       },

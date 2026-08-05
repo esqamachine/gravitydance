@@ -17,6 +17,7 @@ import {
   Home,
 } from "lucide-react";
 import LogoMark from "@/components/Logo";
+import ThemeToggle from "@/components/ThemeToggle";
 import { signOut } from "@/app/auth/actions";
 
 const items = [
@@ -57,6 +58,7 @@ export default function AdminShell({
             <span className="hidden font-body text-sm text-muted md:inline">
               {name}
             </span>
+            <ThemeToggle className="h-10 w-10" />
             <Link
               href="/dashboard"
               className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 font-body text-sm text-ink transition hover:border-primary/40 hover:bg-primary/10 sm:flex"
