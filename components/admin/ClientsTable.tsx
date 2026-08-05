@@ -254,11 +254,11 @@ export default function ClientsTable({
       {/* Модалка добавления клиента */}
       {addOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
           onClick={() => setAddOpen(false)}
         >
           <div
-            className="animate-pop-in w-full max-w-md rounded-[1.75rem] border border-white/10 bg-card p-6 shadow-2xl"
+            className="animate-pop-in min-h-full w-full bg-card p-5 shadow-2xl sm:my-4 sm:min-h-0 sm:max-w-md sm:rounded-[1.75rem] sm:border sm:border-white/10 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

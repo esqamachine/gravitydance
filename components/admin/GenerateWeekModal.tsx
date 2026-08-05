@@ -78,11 +78,11 @@ export default function GenerateWeekModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/70 backdrop-blur-sm sm:items-start sm:p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="animate-pop-in my-4 w-full max-w-xl rounded-[1.75rem] border border-white/10 bg-card p-6 shadow-2xl"
+            className="animate-pop-in min-h-full w-full bg-card p-5 shadow-2xl sm:my-4 sm:min-h-0 sm:max-w-xl sm:rounded-[1.75rem] sm:border sm:border-white/10 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -156,8 +156,8 @@ export default function GenerateWeekModal({
                 </div>
 
                 {/* Превью */}
-                <div className="mt-5 max-h-72 overflow-y-auto rounded-2xl border border-white/10">
-                  <table className="w-full text-left">
+                <div className="mt-5 max-h-72 overflow-auto rounded-2xl border border-white/10">
+                  <table className="w-full min-w-[30rem] text-left">
                     <thead className="sticky top-0 bg-surface font-body text-xs uppercase tracking-wide text-muted">
                       <tr>
                         <th className="px-4 py-2">Дата</th>

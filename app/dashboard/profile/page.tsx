@@ -34,11 +34,11 @@ export default async function ProfilePage() {
 
       <div className="rounded-[1.75rem] border border-white/10 bg-card p-6 sm:p-8">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-gradient font-heading text-2xl font-bold text-white">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-gradient font-heading text-2xl font-bold text-white">
             {profile.first_name.charAt(0)}
           </div>
-          <div>
-            <p className="font-heading text-xl font-bold text-ink">
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-heading text-lg font-bold text-ink md:text-xl lg:text-2xl">
               {fullName(profile)}
             </p>
             <p className="font-body text-sm capitalize text-muted">

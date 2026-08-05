@@ -263,13 +263,13 @@ function EditModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[70] flex justify-center overflow-y-auto bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="animate-pop-in my-4 w-full max-w-md space-y-3 rounded-[1.75rem] border border-white/10 bg-card p-6 shadow-2xl"
+        className="animate-pop-in min-h-full w-full space-y-3 bg-card p-5 shadow-2xl sm:my-4 sm:min-h-0 sm:max-w-md sm:rounded-[1.75rem] sm:border sm:border-white/10 sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

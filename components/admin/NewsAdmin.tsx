@@ -139,13 +139,13 @@ export default function NewsAdmin({ news }: { news: News[] }) {
 
       {open && (
         <div
-          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/70 backdrop-blur-sm sm:items-start sm:p-4"
           onClick={() => setOpen(false)}
         >
           <form
             onSubmit={handleSubmit}
             onClick={(e) => e.stopPropagation()}
-            className="animate-pop-in my-4 w-full max-w-lg space-y-3 rounded-[1.75rem] border border-white/10 bg-card p-6 shadow-2xl"
+            className="animate-pop-in min-h-full w-full space-y-3 bg-card p-5 shadow-2xl sm:my-4 sm:min-h-0 sm:max-w-lg sm:rounded-[1.75rem] sm:border sm:border-white/10 sm:p-6"
           >
             <div className="flex items-center justify-between">
               <h3 className="font-heading text-lg font-bold text-ink">

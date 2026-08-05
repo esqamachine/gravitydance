@@ -190,7 +190,7 @@ export default function GalleryAdmin({
                 loading="lazy"
                 className="h-full w-full object-cover"
               />
-              <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
+              <div className="absolute right-2 top-2 flex gap-1.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                 <button
                   onClick={() => {
                     setReplaceTarget(img);
