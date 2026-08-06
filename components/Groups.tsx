@@ -57,13 +57,13 @@ export default function Groups() {
         <div className="mt-8">
           <article
             key={group.id}
-            className="grid animate-fade-in-up overflow-hidden rounded-[2rem] border border-white/10 bg-card md:grid-cols-2"
+            className="grid h-[600px] animate-fade-in-up grid-rows-[220px_1fr] overflow-hidden rounded-[2rem] border border-white/10 bg-card md:h-[440px] md:grid-cols-2 md:grid-rows-1"
           >
             {/* Визуал — фото группы (эмодзи/градиент как fallback).
                 object-cover заполняет всю область карточки, одинаково для всех
                 групп: мобилка — горизонтальный прямоугольник сверху, десктоп —
                 левая половина карточки. Без полей и рамок вокруг. */}
-            <div className="relative flex min-h-[15rem] items-center justify-center overflow-hidden bg-surface md:min-h-[24rem]">
+            <div className="relative flex h-full items-center justify-center overflow-hidden bg-surface">
               <div className="absolute -left-10 top-0 h-56 w-56 animate-orb-1 rounded-full bg-primary/25 blur-[80px]" />
               <div className="absolute bottom-0 right-0 h-56 w-56 animate-orb-3 rounded-full bg-pink/20 blur-[80px]" />
               <span className="relative z-[1] text-7xl opacity-70 drop-shadow-[0_0_30px_rgba(167,139,250,0.4)]">
@@ -80,12 +80,14 @@ export default function Groups() {
               />
             </div>
 
-            {/* Информация */}
-            <div className="flex flex-col p-6 sm:p-8 md:p-10">
+            {/* Информация — фиксированная высота ячейки, кнопки прижаты к низу
+                (mt-auto), описание обрезается (line-clamp), чтобы карточки всех
+                групп были одинаковой высоты независимо от объёма текста. */}
+            <div className="flex h-full flex-col overflow-hidden p-6 sm:p-8 md:p-8">
               <h3 className="font-heading text-2xl font-bold text-ink sm:text-3xl">
                 {group.title}
               </h3>
-              <p className="mt-4 flex-1 font-body text-base leading-relaxed text-muted">
+              <p className="mt-3 line-clamp-3 font-body text-base leading-relaxed text-muted md:line-clamp-4">
                 {group.description}
               </p>
 
@@ -112,7 +114,7 @@ export default function Groups() {
                 <span>Расписание: {group.schedule}</span>
               </div>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:self-start">
+              <div className="mt-auto flex flex-col gap-3 pt-6 sm:flex-row sm:self-start">
                 <Link
                   href="/#signup"
                   className="btn-cta block w-full px-8 py-3.5 text-center font-heading text-sm font-bold sm:w-auto"
