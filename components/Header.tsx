@@ -40,8 +40,8 @@ export default function Header() {
       <header
         className={`fixed inset-x-0 top-0 z-40 border-b transition-all duration-300 ${
           scrolled
-            ? "border-white/10 bg-base/80 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
-            : "border-transparent bg-base/30 backdrop-blur-md"
+            ? "border-white/10 bg-page/80 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+            : "border-transparent bg-page/30 backdrop-blur-md"
         }`}
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

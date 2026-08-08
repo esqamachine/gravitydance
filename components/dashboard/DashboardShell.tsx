@@ -35,9 +35,9 @@ export default function DashboardShell({
     href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 
   return (
-    <div className="min-h-screen bg-base">
+    <div className="min-h-screen bg-page">
       {/* Хедер */}
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-base/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-page/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <LogoMark className="h-9 w-9" />
@@ -112,7 +112,7 @@ export default function DashboardShell({
       </div>
 
       {/* Нижняя навигация (мобильный) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-base/90 backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-page/90 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-md items-stretch justify-around">
           {items.map((it) => {
             const Icon = it.icon;

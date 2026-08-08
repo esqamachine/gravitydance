@@ -126,14 +126,14 @@ export default function FamilyGrid() {
         <button
           onClick={() => scrollByCards(-1)}
           aria-label="Предыдущая карточка"
-          className="absolute left-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-base/70 text-ink backdrop-blur-md transition hover:border-primary/50 hover:bg-base sm:left-4 lg:left-6"
+          className="absolute left-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-page/70 text-ink backdrop-blur-md transition hover:border-primary/50 hover:bg-page sm:left-4 lg:left-6"
         >
           <ChevronLeft size={22} />
         </button>
         <button
           onClick={() => scrollByCards(1)}
           aria-label="Следующая карточка"
-          className="absolute right-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-base/70 text-ink backdrop-blur-md transition hover:border-primary/50 hover:bg-base sm:right-4 lg:right-6"
+          className="absolute right-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-page/70 text-ink backdrop-blur-md transition hover:border-primary/50 hover:bg-page sm:right-4 lg:right-6"
         >
           <ChevronRight size={22} />
         </button>

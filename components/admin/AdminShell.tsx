@@ -45,8 +45,8 @@ export default function AdminShell({
     href === "/admin" ? pathname === href : pathname.startsWith(href);
 
   return (
-    <div className="min-h-screen bg-base">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-base/80 backdrop-blur-xl">
+    <div className="min-h-screen bg-page">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-page/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link href="/admin" className="flex items-center gap-2.5">
             <LogoMark className="h-9 w-9" />
@@ -106,7 +106,7 @@ export default function AdminShell({
       </div>
 
       {/* Нижняя навигация (мобильный) */}
-      <nav className="no-scrollbar fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-white/10 bg-base/90 backdrop-blur-xl lg:hidden">
+      <nav className="no-scrollbar fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-white/10 bg-page/90 backdrop-blur-xl lg:hidden">
         {items.map((it) => {
           const Icon = it.icon;
           const active = isActive(it.href);
