@@ -64,9 +64,34 @@ export async function requireSession(): Promise<SessionData> {
   return session;
 }
 
-/** Требует роль admin, иначе редирект. */
+/** Пускает в админку и админа (руководитель), и тренера (coach).
+ *  Клиента — на /dashboard. Возвращает сессию с профилем. */
+export async function requireStaff(): Promise<SessionData> {
+  const session = await requireSession();
+  const role = session.profile?.role;
+  if (role !== "admin" && role !== "coach") redirect("/dashboard");
+  return session;
+}
+
+/** Требует роль admin. Тренера отправляет на его домашнюю страницу
+ *  (/admin/groups — «Мои группы»), клиента — на /dashboard.
+ *  Используется и в admin-only страницах, и в admin-only server actions. */
 export async function requireAdmin(): Promise<SessionData> {
   const session = await requireSession();
-  if (session.profile?.role !== "admin") redirect("/dashboard");
+  const role = session.profile?.role;
+  if (role === "admin") return session;
+  if (role === "coach") redirect("/admin/groups");
+  redirect("/dashboard");
+  // недостижимо (redirect бросает), но нужно для типизации
   return session;
+}
+
+/** true, если текущая сессия — руководитель (admin). */
+export function isAdmin(session: SessionData): boolean {
+  return session.profile?.role === "admin";
+}
+
+/** true, если текущая сессия — тренер (coach). */
+export function isCoach(session: SessionData): boolean {
+  return session.profile?.role === "coach";
 }

@@ -4,14 +4,18 @@ import {
   getAllSubgroups,
 } from "@/lib/queries";
 import type { Subgroup } from "@/lib/db";
+import { requireStaff } from "@/lib/account";
+import { getScopeGroupIds } from "@/lib/staff";
 import TemplatesAdmin from "@/components/admin/TemplatesAdmin";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminTemplatesPage() {
+  const session = await requireStaff();
+  const scope = await getScopeGroupIds(session);
   const [templateSets, groups, subgroups] = await Promise.all([
-    getTemplateSets(),
-    getAllGroups(),
+    getTemplateSets(scope),
+    getAllGroups(scope),
     getAllSubgroups(),
   ]);
 

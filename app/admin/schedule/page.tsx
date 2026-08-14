@@ -5,6 +5,8 @@ import {
   getScheduleTemplates,
 } from "@/lib/queries";
 import { type Subgroup } from "@/lib/db";
+import { requireStaff } from "@/lib/account";
+import { getScopeGroupIds } from "@/lib/staff";
 import LessonForm from "@/components/admin/LessonForm";
 import GenerateWeekModal from "@/components/admin/GenerateWeekModal";
 import ScheduleList from "@/components/admin/ScheduleList";
@@ -12,11 +14,13 @@ import ScheduleList from "@/components/admin/ScheduleList";
 export const dynamic = "force-dynamic";
 
 export default async function AdminSchedulePage() {
+  const session = await requireStaff();
+  const scope = await getScopeGroupIds(session);
   const [groups, lessons, subgroups, templates] = await Promise.all([
-    getAllGroups(),
-    getAllLessons(),
+    getAllGroups(scope),
+    getAllLessons(scope),
     getAllSubgroups(),
-    getScheduleTemplates(),
+    getScheduleTemplates(scope),
   ]);
 
   const subgroupsByGroup: Record<string, Subgroup[]> = {};

@@ -1,10 +1,12 @@
 import { getAllProfiles, getAllGroups, getAllSubgroups } from "@/lib/queries";
 import type { Subgroup } from "@/lib/db";
 import ClientsTable from "@/components/admin/ClientsTable";
+import { requireAdmin } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminClientsPage() {
+  await requireAdmin();
   const [clients, groups, subgroups] = await Promise.all([
     getAllProfiles(),
     getAllGroups(),

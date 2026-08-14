@@ -244,12 +244,13 @@ export function getAllProfiles(): Promise<ProfileRow[]> {
   }, []);
 }
 
-export function getAllGroups(): Promise<Group[]> {
+/** groupIds: undefined/null — без ограничения (все группы, для админа);
+ *  массив — только эти группы (область видимости тренера). */
+export function getAllGroups(groupIds?: string[] | null): Promise<Group[]> {
   return safe(async () => {
-    const { data } = await supabaseAdmin
-      .from("groups")
-      .select("*")
-      .order("name");
+    let q = supabaseAdmin.from("groups").select("*").order("name");
+    if (groupIds) q = q.in("id", groupIds);
+    const { data } = await q;
     return (data ?? []) as Group[];
   }, []);
 }
@@ -258,12 +259,16 @@ export interface GroupWithCount extends Group {
   student_count: number;
 }
 
-export function getGroupsWithCounts(): Promise<GroupWithCount[]> {
+export function getGroupsWithCounts(
+  groupIds?: string[] | null
+): Promise<GroupWithCount[]> {
   return safe(async () => {
-    const { data } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("groups")
       .select("*, client_groups(count)")
       .order("name");
+    if (groupIds) q = q.in("id", groupIds);
+    const { data } = await q;
     return ((data ?? []) as (Group & {
       client_groups: { count: number }[];
     })[]).map((g) => ({
@@ -394,13 +399,17 @@ export interface LessonAdmin extends Lesson {
   subgroup_name: string | null;
 }
 
-export function getAllLessons(): Promise<LessonAdmin[]> {
+export function getAllLessons(
+  groupIds?: string[] | null
+): Promise<LessonAdmin[]> {
   return safe(async () => {
     const subs = await subgroupMap();
-    const { data } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("lessons")
       .select("*, group:groups(name)")
       .order("date", { ascending: false });
+    if (groupIds) q = q.in("group_id", groupIds);
+    const { data } = await q;
     return ((data ?? []) as (Lesson & { group: { name: string } | null })[]).map(
       (l) => ({
         ...l,
@@ -731,14 +740,18 @@ export interface TemplateRow extends ScheduleTemplate {
   subgroup_name: string | null;
 }
 
-export function getScheduleTemplates(): Promise<TemplateRow[]> {
+export function getScheduleTemplates(
+  groupIds?: string[] | null
+): Promise<TemplateRow[]> {
   return safe(async () => {
     const subs = await subgroupMap();
-    const { data } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("schedule_templates")
       .select("*, group:groups(name)")
       .order("lesson_date", { ascending: true, nullsFirst: false })
       .order("start_time", { ascending: true });
+    if (groupIds) q = q.in("group_id", groupIds);
+    const { data } = await q;
     return ((data ?? []) as (ScheduleTemplate & {
       group: { name: string } | null;
     })[]).map((t) => ({
@@ -755,9 +768,11 @@ export interface TemplateSet {
   lessons: TemplateRow[];
 }
 
-export function getTemplateSets(): Promise<TemplateSet[]> {
+export function getTemplateSets(
+  groupIds?: string[] | null
+): Promise<TemplateSet[]> {
   return safe(async () => {
-    const rows = await getScheduleTemplates();
+    const rows = await getScheduleTemplates(groupIds);
     const byName = new Map<string, TemplateRow[]>();
     for (const r of rows) {
       const arr = byName.get(r.name) ?? [];

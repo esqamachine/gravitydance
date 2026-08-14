@@ -1,14 +1,39 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin, digits } from "@/lib/account";
+import { requireAdmin, requireStaff, digits } from "@/lib/account";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   getClientDetail,
   getGroupDetail,
   getClientJournal,
 } from "@/lib/queries";
+import {
+  canAccessGroup,
+  lessonGroupId,
+  getGroupTrainers,
+  getCoachProfiles,
+  getScopeGroupIds,
+} from "@/lib/staff";
+import { fullName } from "@/lib/db";
 import { slugify } from "@/lib/slug";
+
+/** Требует доступ к группе: admin — всегда, coach — только к своей.
+ *  Бросает ошибку при отказе (прерывает мутацию). Возвращает сессию. */
+async function requireGroupAccess(groupId: string) {
+  const session = await requireStaff();
+  if (!(await canAccessGroup(session, groupId))) {
+    throw new Error("Недостаточно прав для этой группы");
+  }
+  return session;
+}
+
+/** Требует доступ к занятию по его группе (для coach). */
+async function requireLessonAccess(lessonId: string) {
+  const gid = await lessonGroupId(lessonId);
+  if (!gid) throw new Error("Занятие не найдено");
+  return requireGroupAccess(gid);
+}
 
 /** Читает подробную карточку клиента (для модалки в админке). */
 export async function getClientDetailAction(profileId: string) {
@@ -22,10 +47,78 @@ export async function getClientJournalAction(profileId: string) {
   return getClientJournal(profileId);
 }
 
-/** Читает подробности группы с участниками (для модалки в админке). */
+/** Читает подробности группы с участниками (для модалки в админке).
+ *  Тренер может открыть только свою группу. */
 export async function getGroupDetailAction(groupId: string) {
-  await requireAdmin();
+  await requireGroupAccess(groupId);
   return getGroupDetail(groupId);
+}
+
+/* ---------- Привязка тренеров к группам (только admin) ---------- */
+
+/** Тренеры группы + признак доступности таблицы trainer_groups. */
+export async function getGroupTrainersAction(groupId: string) {
+  await requireAdmin();
+  return getGroupTrainers(groupId);
+}
+
+/** Список профилей-тренеров (role='coach') для селекта «Назначить тренера». */
+export async function getCoachesAction() {
+  await requireAdmin();
+  const coaches = await getCoachProfiles();
+  return coaches.map((c) => ({ id: c.id, name: fullName(c) }));
+}
+
+/** Привязывает тренера к группе. */
+export async function assignTrainer(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const group_id = String(formData.get("group_id") ?? "").trim();
+  const trainer_id = String(formData.get("trainer_id") ?? "").trim();
+  if (!group_id || !trainer_id) return { ok: false, error: "Нет данных" };
+
+  const { error } = await supabaseAdmin
+    .from("trainer_groups")
+    .insert({ group_id, trainer_id });
+
+  if (error) {
+    // Таблицы нет (миграция 032 не выполнена) — сообщаем понятно.
+    if (/relation .*trainer_groups.* does not exist/i.test(error.message)) {
+      return {
+        ok: false,
+        error: "Таблица будет доступна после применения миграции 032",
+      };
+    }
+    // Дубликат привязки — считаем успехом (идемпотентно).
+    if (/duplicate key/i.test(error.message)) return { ok: true };
+    console.error("[assignTrainer]", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  revalidateGroups();
+  return { ok: true };
+}
+
+/** Снимает привязку тренера от группы по id строки trainer_groups. */
+export async function unassignTrainer(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { ok: false, error: "Нет id" };
+
+  const { error } = await supabaseAdmin
+    .from("trainer_groups")
+    .delete()
+    .eq("id", id);
+  if (error) {
+    console.error("[unassignTrainer]", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  revalidateGroups();
+  return { ok: true };
 }
 
 export async function addClient(formData: FormData) {
@@ -194,8 +287,6 @@ export async function deleteGroup(
 }
 
 export async function addLesson(formData: FormData) {
-  await requireAdmin();
-
   const group_id = String(formData.get("group_id") ?? "");
   const subgroup_id = String(formData.get("subgroup_id") ?? "").trim() || null;
   const title = String(formData.get("title") ?? "").trim() || null;
@@ -205,6 +296,7 @@ export async function addLesson(formData: FormData) {
   const coach_name = String(formData.get("coach_name") ?? "").trim() || null;
 
   if (!group_id || !date || !start_time || !end_time) return;
+  await requireGroupAccess(group_id);
 
   const row = { group_id, subgroup_id, title, date, start_time, end_time, coach_name };
   const { error } = await supabaseAdmin.from("lessons").insert(row);
@@ -223,9 +315,9 @@ export async function addLesson(formData: FormData) {
 
 /** Полностью удаляет занятие (для ошибочных/лишних записей). */
 export async function deleteLesson(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("lesson_id") ?? "");
   if (!id) return;
+  await requireLessonAccess(id);
   await supabaseAdmin.from("lessons").delete().eq("id", id);
   revalidatePath("/admin/schedule");
   revalidatePath("/admin/attendance");
@@ -419,9 +511,9 @@ export async function excludeClient(formData: FormData) {
 }
 
 export async function cancelLesson(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("lesson_id") ?? "");
   if (!id) return;
+  await requireLessonAccess(id);
   await supabaseAdmin
     .from("lessons")
     .update({ status: "cancelled" })
@@ -430,8 +522,6 @@ export async function cancelLesson(formData: FormData) {
 }
 
 export async function markAttendance(formData: FormData) {
-  await requireAdmin();
-
   const lesson_id = String(formData.get("lesson_id") ?? "");
   const profile_id = String(formData.get("profile_id") ?? "");
   const child_id = String(formData.get("child_id") ?? "").trim() || null;
@@ -441,6 +531,7 @@ export async function markAttendance(formData: FormData) {
     | "late";
 
   if (!lesson_id || !profile_id) return;
+  await requireLessonAccess(lesson_id);
 
   // Уникальность на (lesson, profile, child) с индексом на COALESCE-выражении,
   // поэтому select-then-write вместо upsert.
@@ -735,7 +826,6 @@ export async function deleteGalleryImage(formData: FormData) {
 /* ---------- Шаблоны расписания ---------- */
 
 export async function saveTemplate(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const group_id = String(formData.get("group_id") ?? "").trim();
@@ -746,6 +836,7 @@ export async function saveTemplate(formData: FormData) {
   const coach = String(formData.get("coach") ?? "").trim();
   if (!name || !group_id || !day_of_week || !start_time || !end_time || !coach)
     return;
+  await requireGroupAccess(group_id);
 
   const row = { name, group_id, subgroup_id, day_of_week, start_time, end_time, coach };
   if (id) {
@@ -757,9 +848,17 @@ export async function saveTemplate(formData: FormData) {
 }
 
 export async function deleteTemplate(formData: FormData) {
-  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  // Проверяем доступ по группе шаблона.
+  const { data: tpl } = await supabaseAdmin
+    .from("schedule_templates")
+    .select("group_id")
+    .eq("id", id)
+    .maybeSingle();
+  const gid = (tpl as { group_id: string } | null)?.group_id;
+  if (!gid) return;
+  await requireGroupAccess(gid);
   await supabaseAdmin.from("schedule_templates").delete().eq("id", id);
   revalidatePath("/admin/templates");
 }
@@ -785,7 +884,7 @@ function dowOf(iso: string): number {
 /** Сохраняет весь шаблон: удаляет прежние строки этого имени и вставляет заново.
  *  Каждое занятие привязано к конкретной дате (lesson_date). */
 export async function saveTemplateSet(formData: FormData) {
-  await requireAdmin();
+  const session = await requireStaff();
   const name = String(formData.get("name") ?? "").trim();
   const originalName = String(formData.get("original_name") ?? "").trim();
   let lessons: TemplateLessonInput[] = [];
@@ -797,12 +896,23 @@ export async function saveTemplateSet(formData: FormData) {
   }
   if (!name) return { ok: false, error: "Укажите название шаблона" };
 
+  // Тренер может задействовать только свои группы (scope === null → без ограничения).
+  const scope = await getScopeGroupIds(session);
+  if (scope !== null) {
+    const inputGroupIds = Array.from(
+      new Set(lessons.map((l) => l.group_id).filter(Boolean))
+    );
+    const foreign = inputGroupIds.filter((g) => !scope.includes(g));
+    if (foreign.length)
+      return { ok: false, error: "Можно сохранять только свои группы" };
+  }
+
   // Удаляем прежние строки (по старому имени при переименовании и по новому).
+  // Тренер удаляет только строки своих групп.
   const names = Array.from(new Set([name, originalName].filter(Boolean)));
-  const { error: delErr } = await supabaseAdmin
-    .from("schedule_templates")
-    .delete()
-    .in("name", names);
+  let del = supabaseAdmin.from("schedule_templates").delete().in("name", names);
+  if (scope !== null) del = del.in("group_id", scope);
+  const { error: delErr } = await del;
   if (delErr) {
     console.error("[saveTemplateSet] delete:", delErr);
     return { ok: false, error: delErr.message };
@@ -841,10 +951,14 @@ export async function saveTemplateSet(formData: FormData) {
 
 /** Удаляет весь шаблон (все строки этого имени). */
 export async function deleteTemplateSet(formData: FormData) {
-  await requireAdmin();
+  const session = await requireStaff();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  await supabaseAdmin.from("schedule_templates").delete().eq("name", name);
+  // Тренер удаляет из набора только строки своих групп.
+  const scope = await getScopeGroupIds(session);
+  let del = supabaseAdmin.from("schedule_templates").delete().eq("name", name);
+  if (scope !== null) del = del.in("group_id", scope);
+  await del;
   revalidatePath("/admin/templates");
 }
 
@@ -853,7 +967,7 @@ export async function deleteTemplateSet(formData: FormData) {
 export async function applyTemplateMonth(
   name: string
 ): Promise<{ created: number; skipped: number; total: number; error?: string }> {
-  await requireAdmin();
+  const session = await requireStaff();
   console.log("[applyTemplateMonth] name:", name);
   if (!name) return { created: 0, skipped: 0, total: 0 };
 
@@ -865,7 +979,7 @@ export async function applyTemplateMonth(
     console.error("[applyTemplateMonth] select:", selErr);
     return { created: 0, skipped: 0, total: 0, error: selErr.message };
   }
-  const rows = (tpls ?? []) as {
+  const allRows = (tpls ?? []) as {
     group_id: string;
     subgroup_id: string | null;
     lesson_date: string | null;
@@ -874,6 +988,10 @@ export async function applyTemplateMonth(
     coach: string;
     hall: string | null;
   }[];
+  // Тренер разворачивает только занятия своих групп.
+  const scope = await getScopeGroupIds(session);
+  const rows =
+    scope === null ? allRows : allRows.filter((r) => scope.includes(r.group_id));
   console.log("[applyTemplateMonth] template rows:", rows.length);
   if (rows.length === 0)
     return { created: 0, skipped: 0, total: 0, error: "В шаблоне нет занятий" };
@@ -974,13 +1092,13 @@ function addDaysISO(iso: string, n: number): string {
 export async function generateWeek(
   mondayISO: string
 ): Promise<{ created: number; skipped: number }> {
-  await requireAdmin();
+  const session = await requireStaff();
   if (!mondayISO) return { created: 0, skipped: 0 };
 
   const { data: templates } = await supabaseAdmin
     .from("schedule_templates")
     .select("*");
-  const tpls = (templates ?? []) as {
+  const allTpls = (templates ?? []) as {
     group_id: string;
     subgroup_id: string | null;
     day_of_week: number;
@@ -988,6 +1106,10 @@ export async function generateWeek(
     end_time: string;
     coach: string;
   }[];
+  // Тренер генерирует неделю только по шаблонам своих групп.
+  const scope = await getScopeGroupIds(session);
+  const tpls =
+    scope === null ? allTpls : allTpls.filter((t) => scope.includes(t.group_id));
   if (tpls.length === 0) return { created: 0, skipped: 0 };
 
   const dates = Array.from({ length: 7 }, (_, i) => addDaysISO(mondayISO, i));

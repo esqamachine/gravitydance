@@ -1,0 +1,39 @@
+-- ============================================================
+-- Миграция 032: привязка тренеров к группам (trainer_groups)
+-- Выполнить в Supabase → SQL Editor (после 002/023). Идемпотентна.
+--
+-- Зачем: тренер (role = 'coach') в админке должен видеть и вести ТОЛЬКО свои
+-- группы. Связь many-to-many между profiles (тренеры) и groups.
+-- Пока таблицы нет — код использует фолбэк (показывает все группы),
+-- после этой миграции фильтрация становится реальной.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS trainer_groups (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  trainer_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  group_id   uuid NOT NULL REFERENCES groups(id)   ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (trainer_id, group_id)
+);
+
+CREATE INDEX IF NOT EXISTS trainer_groups_trainer_idx ON trainer_groups (trainer_id);
+CREATE INDEX IF NOT EXISTS trainer_groups_group_idx   ON trainer_groups (group_id);
+
+-- RLS: сайт ходит через service_role (обходит RLS). Для мобильного приложения
+-- даём админу — всё, тренеру — чтение своих строк (сопоставление по email/телефону
+-- из JWT, как в public.is_admin()).
+ALTER TABLE trainer_groups ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "trainer_groups admin all" ON trainer_groups;
+CREATE POLICY "trainer_groups admin all" ON trainer_groups FOR ALL TO authenticated
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "trainer_groups own read" ON trainer_groups;
+CREATE POLICY "trainer_groups own read" ON trainer_groups FOR SELECT TO authenticated
+  USING (
+    trainer_id IN (
+      SELECT id FROM profiles
+      WHERE lower(email) = lower(auth.jwt() ->> 'email')
+         OR phone = regexp_replace(coalesce(auth.jwt() ->> 'phone', ''), '\D', '', 'g')
+    )
+  );

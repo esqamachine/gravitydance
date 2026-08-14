@@ -23,11 +23,14 @@ const items = [
 
 export default function DashboardShell({
   name,
-  isAdmin,
+  staffHref,
+  staffLabel,
   children,
 }: {
   name: string;
-  isAdmin: boolean;
+  /** Ссылка на рабочую панель для персонала (admin/coach). null — скрыть. */
+  staffHref?: string | null;
+  staffLabel?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -50,11 +53,11 @@ export default function DashboardShell({
               {name}
             </span>
             <ThemeToggle className="h-11 w-11" />
-            {isAdmin && (
+            {staffHref && (
               <Link
-                href="/admin"
-                aria-label="Админ-панель"
-                title="Админ-панель"
+                href={staffHref}
+                aria-label={staffLabel}
+                title={staffLabel}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-white shadow-cta transition hover:brightness-105"
               >
                 <Shield size={20} />
@@ -95,13 +98,13 @@ export default function DashboardShell({
                 </Link>
               );
             })}
-            {isAdmin && (
+            {staffHref && (
               <Link
-                href="/admin"
+                href={staffHref}
                 className="mt-2 flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3 font-body text-sm font-medium text-primary-light transition hover:bg-white/5"
               >
                 <Shield size={18} />
-                Админ-панель
+                {staffLabel}
               </Link>
             )}
           </nav>

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { getGalleryImages } from "@/lib/queries";
 import GalleryAdmin from "@/components/admin/GalleryAdmin";
+import { requireAdmin } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ function siteGalleryUrls(): string[] {
 }
 
 export default async function AdminGalleryPage() {
+  await requireAdmin();
   const images = await getGalleryImages();
   const siteUrls = siteGalleryUrls();
   const haveUrls = new Set(images.map((i) => i.image_url));

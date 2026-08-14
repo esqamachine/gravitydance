@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getAllLessons, getLessonRoster } from "@/lib/queries";
 import { formatDate } from "@/lib/db";
 import { markAttendance } from "@/app/admin/actions";
+import { requireStaff } from "@/lib/account";
+import { getScopeGroupIds, canAccessGroup } from "@/lib/staff";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +21,9 @@ export default async function AdminAttendancePage({
   searchParams: Promise<{ lesson?: string }>;
 }) {
   const { lesson: lessonId } = await searchParams;
-  const allLessons = await getAllLessons();
+  const session = await requireStaff();
+  const scope = await getScopeGroupIds(session);
+  const allLessons = await getAllLessons(scope);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
     2,
@@ -34,6 +39,11 @@ export default async function AdminAttendancePage({
   const { lesson, roster } = lessonId
     ? await getLessonRoster(lessonId)
     : { lesson: null, roster: [] };
+
+  // Тренер не должен открывать ростер чужой группы через URL.
+  if (lesson && !(await canAccessGroup(session, lesson.group_id))) {
+    redirect("/admin/attendance");
+  }
 
   return (
     <div className="space-y-6">

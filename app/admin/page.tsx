@@ -7,10 +7,12 @@ import {
   getAllLessons,
 } from "@/lib/queries";
 import { formatMoney } from "@/lib/db";
+import { requireAdmin } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
+  await requireAdmin();
   const [profiles, groups, payments, lessons] = await Promise.all([
     getAllProfiles(),
     getGroupsWithCounts(),

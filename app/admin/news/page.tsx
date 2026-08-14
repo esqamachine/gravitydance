@@ -1,9 +1,11 @@
 import { getAllNews } from "@/lib/queries";
 import NewsAdmin from "@/components/admin/NewsAdmin";
+import { requireAdmin } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminNewsPage() {
+  await requireAdmin();
   const news = await getAllNews();
   return (
     <div className="space-y-6">

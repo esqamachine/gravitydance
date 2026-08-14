@@ -20,7 +20,10 @@ import LogoMark from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import { signOut } from "@/app/auth/actions";
 
-const items = [
+import type { Role } from "@/lib/db";
+
+// Полное меню руководителя (admin).
+const adminItems = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/clients", label: "Клиенты", icon: Users },
   { href: "/admin/groups", label: "Группы", icon: Boxes },
@@ -33,14 +36,26 @@ const items = [
   { href: "/admin/gallery", label: "Галерея", icon: ImageIcon },
 ];
 
+// Меню тренера (coach): только свои группы, расписание, шаблоны, посещения.
+const coachItems = [
+  { href: "/admin/groups", label: "Мои группы", icon: Boxes },
+  { href: "/admin/schedule", label: "Расписание", icon: CalendarDays },
+  { href: "/admin/templates", label: "Шаблоны", icon: CalendarClock },
+  { href: "/admin/attendance", label: "Посещения", icon: ClipboardCheck },
+];
+
 export default function AdminShell({
   name,
+  role,
   children,
 }: {
   name: string;
+  role: Role;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const items = role === "coach" ? coachItems : adminItems;
+  const homeHref = role === "coach" ? "/admin/groups" : "/admin";
   const isActive = (href: string) =>
     href === "/admin" ? pathname === href : pathname.startsWith(href);
 
@@ -48,10 +63,18 @@ export default function AdminShell({
     <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-page/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link href="/admin" className="flex items-center gap-2.5">
+          <Link href={homeHref} className="flex items-center gap-2.5">
             <LogoMark className="h-9 w-9" />
             <span className="font-heading text-lg font-extrabold tracking-wide text-ink">
-              Админ<span className="text-gradient">·панель</span>
+              {role === "coach" ? (
+                <>
+                  Кабинет<span className="text-gradient">·тренера</span>
+                </>
+              ) : (
+                <>
+                  Админ<span className="text-gradient">·панель</span>
+                </>
+              )}
             </span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">

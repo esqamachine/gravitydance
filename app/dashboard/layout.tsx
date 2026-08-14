@@ -14,8 +14,13 @@ export default async function DashboardLayout({
     ? fullName(session.profile)
     : session.email || session.phone || "Гость";
 
+  const role = session.profile?.role;
+  const staffHref =
+    role === "admin" ? "/admin" : role === "coach" ? "/admin/groups" : null;
+  const staffLabel = role === "coach" ? "Кабинет тренера" : "Админ-панель";
+
   return (
-    <DashboardShell name={name} isAdmin={session.profile?.role === "admin"}>
+    <DashboardShell name={name} staffHref={staffHref} staffLabel={staffLabel}>
       {children}
     </DashboardShell>
   );

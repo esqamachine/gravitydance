@@ -1,9 +1,11 @@
 import { getAllCamps } from "@/lib/queries";
 import CampsAdmin from "@/components/admin/CampsAdmin";
+import { requireAdmin } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCampsPage() {
+  await requireAdmin();
   const camps = await getAllCamps();
   return (
     <div className="space-y-6">
