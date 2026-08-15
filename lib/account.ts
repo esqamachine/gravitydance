@@ -42,10 +42,15 @@ export async function getSession(): Promise<SessionData | null> {
       profile = (data as Profile) ?? null;
     }
     if (!profile && email) {
+      // Регистронезависимое сравнение: Supabase Auth хранит email в нижнем
+      // регистре, а в profiles он мог быть введён вручную с заглавными буквами
+      // (иначе профиль тренера/клиента не находится и он «не видит» админку).
+      // Экранируем % и _ , чтобы они не работали как шаблон ILIKE.
+      const pattern = email.replace(/([%_\\])/g, "\\$1");
       const { data } = await supabaseAdmin
         .from("profiles")
         .select("*")
-        .eq("email", email)
+        .ilike("email", pattern)
         .maybeSingle();
       profile = (data as Profile) ?? null;
     }
